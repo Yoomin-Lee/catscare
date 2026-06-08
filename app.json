@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "meowlog",
-    "slug": "meowlog",
+    "name": "catscare",
+    "slug": "catscare",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "meowlog",
+    "scheme": "catscare",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
