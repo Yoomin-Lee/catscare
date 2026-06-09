@@ -70,7 +70,7 @@ export default function HomeScreen() {
   const [birthY, setBirthY] = useState('')
   const [birthM, setBirthM] = useState('')
   const [birthD, setBirthD] = useState('')
-  const [weightText, setWeightText] = useState('3')
+  const [weightText, setWeightText] = useState('')
 
   const setBirthPart = (part: 'y' | 'm' | 'd', val: string) => {
     const next = { y: birthY, m: birthM, d: birthD, [part]: val }
