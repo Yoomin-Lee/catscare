@@ -30,6 +30,28 @@ const HOSPITAL_CYCLES = [
 ]
 const SAND_CYCLES = Array.from({ length: 10 }, (_, i) => ({ weeks: i + 1 }))
 
+type NotifyEntry = { id: string; days: number; time: string }
+
+const DAY_OPTIONS = [
+  { value: 0,  label: '당일' },
+  { value: 1,  label: '1일 전' },
+  { value: 2,  label: '2일 전' },
+  { value: 3,  label: '3일 전' },
+  { value: 5,  label: '5일 전' },
+  { value: 7,  label: '1주 전' },
+  { value: 14, label: '2주 전' },
+]
+
+const TIME_OPTIONS = Array.from({ length: 34 }, (_, i) => {
+  const totalMins = 360 + i * 30   // 06:00 ~ 22:30, 30분 단위
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  const ampm = h < 12 ? '오전' : '오후'
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return { value: `${pad(h)}:${pad(m)}`, label: `${ampm} ${h12}:${pad(m)}` }
+})
+
 const WEEK_LABELS = ['일', '월', '화', '수', '목', '금', '토']
 
 function CalendarDropdown({ value, max, onChange }: {
@@ -142,18 +164,21 @@ export default function AlarmScreen() {
   }
   const [alarms, setAlarms] = useState({ hospital: true, sand: true, medication: false })
   const toggle = (key: keyof typeof alarms) => setAlarms(p => ({ ...p, [key]: !p[key] }))
-  const [sandNotifyDays, setSandNotifyDays] = useState<number[]>([0, 3])
+  const [sandNotify, setSandNotify] = useState<NotifyEntry[]>([
+    { id: '1', days: 3, time: '09:00' },
+    { id: '2', days: 0, time: '09:00' },
+  ])
+  const [openDrop, setOpenDrop] = useState<string | null>(null)
 
-  const toggleNotifyDay = (d: number) =>
-    setSandNotifyDays(prev =>
-      prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort((a, b) => b - a)
-    )
-
-  const notifyLabel = (days: number[]) => {
-    if (days.length === 0) return '없음'
-    return days
-      .sort((a, b) => b - a)
-      .map(d => d === 0 ? '당일' : `${d}일 전`)
+  const notifyLabel = (entries: NotifyEntry[]) => {
+    if (entries.length === 0) return '없음'
+    return entries
+      .sort((a, b) => b.days - a.days)
+      .map(e => {
+        const dayStr = DAY_OPTIONS.find(o => o.value === e.days)?.label ?? `${e.days}일 전`
+        const timeStr = TIME_OPTIONS.find(o => o.value === e.time)?.label ?? e.time
+        return `${dayStr} ${timeStr}`
+      })
       .join(' · ')
   }
   const [panel, setPanel] = useState<'hospital' | 'sand' | null>(null)
@@ -231,7 +256,7 @@ export default function AlarmScreen() {
         <View style={styles.settingsCard}>
           {[
             { key: 'hospital' as const, label: '병원 방문 알림', sub: '방문 7일 전, 1일 전' },
-            { key: 'sand' as const, label: '화장실 모래 교체 알림', sub: `교체 ${notifyLabel(sandNotifyDays)}` },
+            { key: 'sand' as const, label: '화장실 모래 교체 알림', sub: `교체 ${notifyLabel(sandNotify)}` },
           ].map((item, i, arr) => (
             <View key={item.key} style={[styles.toggleRow, i < arr.length - 1 && styles.toggleBorder]}>
               <View style={styles.toggleInfo}>
@@ -332,7 +357,7 @@ export default function AlarmScreen() {
           <View style={styles.toggleInfo}>
             <Text style={styles.toggleLabel}>교체 알림</Text>
             {alarms.sand
-              ? <Text style={styles.toggleSub}>{notifyLabel(sandNotifyDays)}</Text>
+              ? <Text style={styles.toggleSub}>{notifyLabel(sandNotify)}</Text>
               : <Text style={styles.toggleSub}>꺼짐</Text>
             }
           </View>
@@ -342,23 +367,67 @@ export default function AlarmScreen() {
         {alarms.sand && (
           <View style={styles.notifySection}>
             <Text style={styles.notifySectionLabel}>알림 시기</Text>
-            <View style={styles.notifyChips}>
-              {[0, 1, 2, 3, 5, 7].map(d => {
-                const active = sandNotifyDays.includes(d)
-                return (
-                  <TouchableOpacity
-                    key={d}
-                    style={[styles.notifyChip, active && styles.notifyChipActive]}
-                    onPress={() => toggleNotifyDay(d)}
-                  >
-                    {active && <Feather name="check" size={11} color="#fff" />}
-                    <Text style={[styles.notifyChipText, active && styles.notifyChipTextActive]}>
-                      {d === 0 ? '당일' : `${d}일 전`}
-                    </Text>
-                  </TouchableOpacity>
-                )
-              })}
-            </View>
+            {sandNotify.map(entry => {
+              const dayOpen  = openDrop === `${entry.id}-day`
+              const timeOpen = openDrop === `${entry.id}-time`
+              const dayLabel  = DAY_OPTIONS.find(o => o.value === entry.days)?.label ?? ''
+              const timeLabel = TIME_OPTIONS.find(o => o.value === entry.time)?.label ?? ''
+              return (
+                <View key={entry.id} style={styles.notifyRow}>
+                  <View style={styles.notifySelRow}>
+                    <TouchableOpacity
+                      style={[styles.notifySel, styles.notifySelDay, dayOpen && styles.notifySelOpen]}
+                      onPress={() => setOpenDrop(dayOpen ? null : `${entry.id}-day`)}
+                    >
+                      <Text style={styles.notifySelText}>{dayLabel}</Text>
+                      <Feather name={dayOpen ? 'chevron-up' : 'chevron-down'} size={12} color="#888" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.notifySel, styles.notifySelTime, timeOpen && styles.notifySelOpen]}
+                      onPress={() => setOpenDrop(timeOpen ? null : `${entry.id}-time`)}
+                    >
+                      <Text style={styles.notifySelText}>{timeLabel}</Text>
+                      <Feather name={timeOpen ? 'chevron-up' : 'chevron-down'} size={12} color="#888" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.notifyRemove}
+                      onPress={() => { setSandNotify(p => p.filter(e => e.id !== entry.id)); setOpenDrop(null) }}
+                    >
+                      <Feather name="x" size={15} color="#bbb" />
+                    </TouchableOpacity>
+                  </View>
+                  {dayOpen && (
+                    <View style={styles.dropList}>
+                      {DAY_OPTIONS.map(o => (
+                        <TouchableOpacity key={o.value} style={styles.dropItem}
+                          onPress={() => { setSandNotify(p => p.map(e => e.id === entry.id ? { ...e, days: o.value } : e)); setOpenDrop(null) }}>
+                          <Feather name="check" size={13} color={entry.days === o.value ? '#1D9E75' : 'transparent'} />
+                          <Text style={[styles.dropItemText, entry.days === o.value && styles.dropItemActive]}>{o.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  {timeOpen && (
+                    <View style={styles.dropList}>
+                      {TIME_OPTIONS.map(o => (
+                        <TouchableOpacity key={o.value} style={styles.dropItem}
+                          onPress={() => { setSandNotify(p => p.map(e => e.id === entry.id ? { ...e, time: o.value } : e)); setOpenDrop(null) }}>
+                          <Feather name="check" size={13} color={entry.time === o.value ? '#1D9E75' : 'transparent'} />
+                          <Text style={[styles.dropItemText, entry.time === o.value && styles.dropItemActive]}>{o.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )
+            })}
+            {sandNotify.length < 5 && (
+              <TouchableOpacity style={styles.addNotifyBtn}
+                onPress={() => setSandNotify(p => [...p, { id: Date.now().toString(), days: 1, time: '09:00' }])}>
+                <Feather name="plus" size={13} color="#1D9E75" />
+                <Text style={styles.addNotifyText}>알림 추가</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
         <Text style={[styles.fieldLabel, { marginTop: 16 }]}>즐겨 쓰는 모래 바로가기</Text>
@@ -467,16 +536,28 @@ const styles = StyleSheet.create({
   linkBtnFullText: { fontSize: 13, color: '#1D9E75', fontWeight: '500' },
   notifySection: { backgroundColor: '#F9F9F9', borderRadius: 12, padding: 14, marginTop: 4 },
   notifySectionLabel: { fontSize: 12, fontWeight: '600', color: '#999', marginBottom: 10 },
-  notifyChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  notifyChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 20, borderWidth: 1, borderColor: '#E5E5E5',
-    backgroundColor: '#fff',
+  notifyRow: { marginBottom: 6 },
+  notifySelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  notifySel: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#fff', borderRadius: 8, borderWidth: 0.5, borderColor: '#E5E5E5',
+    paddingHorizontal: 10, paddingVertical: 9,
   },
-  notifyChipActive: { backgroundColor: '#1D9E75', borderColor: '#1D9E75' },
-  notifyChipText: { fontSize: 13, color: '#666', fontWeight: '500' },
-  notifyChipTextActive: { color: '#fff', fontWeight: '600' },
+  notifySelDay: { flex: 1 },
+  notifySelTime: { flex: 1.4 },
+  notifySelOpen: { borderColor: '#1D9E75', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  notifySelText: { flex: 1, fontSize: 13, color: '#1a1a1a' },
+  notifyRemove: { padding: 6 },
+  dropList: {
+    backgroundColor: '#fff', borderWidth: 0.5, borderColor: '#1D9E75',
+    borderTopWidth: 0, borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
+    marginBottom: 2, overflow: 'hidden',
+  },
+  dropItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 0.5, borderTopColor: '#F5F5F5' },
+  dropItemText: { fontSize: 13, color: '#444' },
+  dropItemActive: { color: '#1D9E75', fontWeight: '600' },
+  addNotifyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingVertical: 8 },
+  addNotifyText: { fontSize: 13, color: '#1D9E75', fontWeight: '600' },
   historyList: { borderRadius: 12, borderWidth: 0.5, borderColor: '#EBEBEB', overflow: 'hidden' },
   historyItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: '#fff' },
   historyBorder: { borderBottomWidth: 0.5, borderBottomColor: '#F5F5F5' },
