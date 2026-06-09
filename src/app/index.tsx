@@ -142,6 +142,20 @@ export default function AlarmScreen() {
   }
   const [alarms, setAlarms] = useState({ hospital: true, sand: true, medication: false })
   const toggle = (key: keyof typeof alarms) => setAlarms(p => ({ ...p, [key]: !p[key] }))
+  const [sandNotifyDays, setSandNotifyDays] = useState<number[]>([0, 3])
+
+  const toggleNotifyDay = (d: number) =>
+    setSandNotifyDays(prev =>
+      prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort((a, b) => b - a)
+    )
+
+  const notifyLabel = (days: number[]) => {
+    if (days.length === 0) return '없음'
+    return days
+      .sort((a, b) => b - a)
+      .map(d => d === 0 ? '당일' : `${d}일 전`)
+      .join(' · ')
+  }
   const [panel, setPanel] = useState<'hospital' | 'sand' | null>(null)
 
   const nextHospital = addMonths(hospitalLastDate, hospitalCycle)
@@ -217,7 +231,7 @@ export default function AlarmScreen() {
         <View style={styles.settingsCard}>
           {[
             { key: 'hospital' as const, label: '병원 방문 알림', sub: '방문 7일 전, 1일 전' },
-            { key: 'sand' as const, label: '화장실 모래 교체 알림', sub: '교체 3일 전, 당일' },
+            { key: 'sand' as const, label: '화장실 모래 교체 알림', sub: `교체 ${notifyLabel(sandNotifyDays)}` },
           ].map((item, i, arr) => (
             <View key={item.key} style={[styles.toggleRow, i < arr.length - 1 && styles.toggleBorder]}>
               <View style={styles.toggleInfo}>
@@ -317,11 +331,36 @@ export default function AlarmScreen() {
         <View style={[styles.toggleRow, { marginTop: 8 }]}>
           <View style={styles.toggleInfo}>
             <Text style={styles.toggleLabel}>교체 알림</Text>
-            <Text style={styles.toggleSub}>3일 전 + 당일</Text>
+            {alarms.sand
+              ? <Text style={styles.toggleSub}>{notifyLabel(sandNotifyDays)}</Text>
+              : <Text style={styles.toggleSub}>꺼짐</Text>
+            }
           </View>
           <Switch value={alarms.sand} onValueChange={() => toggle('sand')}
             trackColor={{ false: '#ddd', true: '#1D9E75' }} thumbColor="#fff" />
         </View>
+        {alarms.sand && (
+          <View style={styles.notifySection}>
+            <Text style={styles.notifySectionLabel}>알림 시기</Text>
+            <View style={styles.notifyChips}>
+              {[0, 1, 2, 3, 5, 7].map(d => {
+                const active = sandNotifyDays.includes(d)
+                return (
+                  <TouchableOpacity
+                    key={d}
+                    style={[styles.notifyChip, active && styles.notifyChipActive]}
+                    onPress={() => toggleNotifyDay(d)}
+                  >
+                    {active && <Feather name="check" size={11} color="#fff" />}
+                    <Text style={[styles.notifyChipText, active && styles.notifyChipTextActive]}>
+                      {d === 0 ? '당일' : `${d}일 전`}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+          </View>
+        )}
         <Text style={[styles.fieldLabel, { marginTop: 16 }]}>즐겨 쓰는 모래 바로가기</Text>
         {[
           { label: '두부 모래 구매 (쿠팡)', url: 'https://www.coupang.com/np/search?q=두부모래' },
@@ -426,6 +465,18 @@ const styles = StyleSheet.create({
   nextDateDday: { fontSize: 13, fontWeight: '700' },
   linkBtnFull: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E1F5EE', borderRadius: 10, padding: 13, marginBottom: 8 },
   linkBtnFullText: { fontSize: 13, color: '#1D9E75', fontWeight: '500' },
+  notifySection: { backgroundColor: '#F9F9F9', borderRadius: 12, padding: 14, marginTop: 4 },
+  notifySectionLabel: { fontSize: 12, fontWeight: '600', color: '#999', marginBottom: 10 },
+  notifyChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  notifyChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1, borderColor: '#E5E5E5',
+    backgroundColor: '#fff',
+  },
+  notifyChipActive: { backgroundColor: '#1D9E75', borderColor: '#1D9E75' },
+  notifyChipText: { fontSize: 13, color: '#666', fontWeight: '500' },
+  notifyChipTextActive: { color: '#fff', fontWeight: '600' },
   historyList: { borderRadius: 12, borderWidth: 0.5, borderColor: '#EBEBEB', overflow: 'hidden' },
   historyItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: '#fff' },
   historyBorder: { borderBottomWidth: 0.5, borderBottomColor: '#F5F5F5' },
