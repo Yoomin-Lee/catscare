@@ -76,6 +76,7 @@ export default function MedicationSection() {
   const [editTarget, setEditTarget] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM())
   const [openTimeDrop, setOpenTimeDrop] = useState<number | null>(null)
+  const [openDosageDrop, setOpenDosageDrop] = useState(false)
 
   const openAdd = () => {
     setEditTarget(null); setForm(EMPTY_FORM()); setOpenTimeDrop(null); setPanelOpen(true)
@@ -151,9 +152,26 @@ export default function MedicationSection() {
           onChangeText={v => setForm(f => ({ ...f, name: v }))} />
 
         <Text style={[styles.fieldLabel, { marginTop: 14 }]}>용량</Text>
-        <TextInput style={styles.input} placeholder="예: 1정, 0.5ml, 1/2정"
-          placeholderTextColor="#bbb" value={form.dosage}
-          onChangeText={v => setForm(f => ({ ...f, dosage: v }))} />
+        <TouchableOpacity
+          style={[styles.timeBtn, openDosageDrop && styles.timeBtnOpen]}
+          onPress={() => { setOpenDosageDrop(v => !v); setOpenTimeDrop(null) }}
+        >
+          <Text style={[styles.timeBtnText, !form.dosage && { color: '#bbb' }]}>
+            {form.dosage || '선택하세요'}
+          </Text>
+          <Feather name={openDosageDrop ? 'chevron-up' : 'chevron-down'} size={12} color="#aaa" />
+        </TouchableOpacity>
+        {openDosageDrop && (
+          <View style={[styles.timeDrop, { borderColor: '#E9785A' }]}>
+            {['1정', '2정', '3정', '4정', '5정'].map(opt => (
+              <TouchableOpacity key={opt} style={styles.timeDropItem}
+                onPress={() => { setForm(f => ({ ...f, dosage: opt })); setOpenDosageDrop(false) }}>
+                <Feather name="check" size={13} color={form.dosage === opt ? '#E9785A' : 'transparent'} />
+                <Text style={[styles.timeDropText, form.dosage === opt && styles.timeDropTextActive]}>{opt}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         <Text style={[styles.fieldLabel, { marginTop: 14 }]}>복용 주기</Text>
         <View style={styles.optionRow}>
@@ -192,7 +210,7 @@ export default function MedicationSection() {
             <View key={i} style={styles.timeRow}>
               <TouchableOpacity
                 style={[styles.timeBtn, isOpen && styles.timeBtnOpen]}
-                onPress={() => setOpenTimeDrop(isOpen ? null : i)}
+                onPress={() => { setOpenTimeDrop(isOpen ? null : i); setOpenDosageDrop(false) }}
               >
                 <Text style={styles.timeDoseLabel}>{i + 1}회차</Text>
                 <Feather name="clock" size={13} color="#888" />
