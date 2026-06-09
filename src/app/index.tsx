@@ -1,5 +1,4 @@
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
-import { Image, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
+import { Image, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
 import { useState } from 'react'
@@ -36,6 +35,81 @@ const SAND_CYCLES = [
   { label: '8주', weeks: 8 },
 ]
 
+const WEEK_LABELS = ['일', '월', '화', '수', '목', '금', '토']
+
+function CalendarDropdown({ value, max, onChange }: {
+  value: Date
+  max?: Date
+  onChange: (date: Date) => void
+}) {
+  const [viewYear, setViewYear] = useState(value.getFullYear())
+  const [viewMonth, setViewMonth] = useState(value.getMonth())
+
+  const firstDow = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  const isSelected = (d: number) =>
+    value.getFullYear() === viewYear && value.getMonth() === viewMonth && value.getDate() === d
+  const isDisabled = (d: number) =>
+    max ? new Date(viewYear, viewMonth, d) > max : false
+
+  const blanks = Array.from({ length: firstDow })
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+
+  return (
+    <View style={calStyles.container}>
+      <View style={calStyles.nav}>
+        <TouchableOpacity onPress={prevMonth} hitSlop={10} style={calStyles.navBtn}>
+          <Feather name="chevron-left" size={18} color="#555" />
+        </TouchableOpacity>
+        <Text style={calStyles.navTitle}>{viewYear}년 {viewMonth + 1}월</Text>
+        <TouchableOpacity onPress={nextMonth} hitSlop={10} style={calStyles.navBtn}>
+          <Feather name="chevron-right" size={18} color="#555" />
+        </TouchableOpacity>
+      </View>
+      <View style={calStyles.weekRow}>
+        {WEEK_LABELS.map((w, i) => (
+          <Text key={w} style={[calStyles.weekLabel, i === 0 && calStyles.sun, i === 6 && calStyles.sat]}>{w}</Text>
+        ))}
+      </View>
+      <View style={calStyles.grid}>
+        {blanks.map((_, i) => <View key={`b${i}`} style={calStyles.cell} />)}
+        {days.map(d => {
+          const col = (firstDow + d - 1) % 7
+          const sel = isSelected(d)
+          const dis = isDisabled(d)
+          return (
+            <TouchableOpacity
+              key={d}
+              style={[calStyles.cell, sel && calStyles.cellSel]}
+              onPress={() => { if (!dis) onChange(new Date(viewYear, viewMonth, d)) }}
+              disabled={dis}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                calStyles.dayText,
+                col === 0 && !sel && calStyles.sun,
+                col === 6 && !sel && calStyles.sat,
+                sel && calStyles.dayTextSel,
+                dis && calStyles.dayTextDis,
+              ]}>{d}</Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
 function getBadgeStyle(days: number) {
   if (days <= 3) return { bg: '#FAEEDA', text: '#BA7517' }
   if (days <= 14) return { bg: '#FAECE7', text: '#993C1D' }
@@ -60,15 +134,6 @@ export default function AlarmScreen() {
   const sandDays = daysUntil(nextSand)
   const hospitalBadge = getBadgeStyle(hospitalDays)
   const sandBadge = getBadgeStyle(sandDays)
-
-  const onHospitalDateChange = (e: DateTimePickerEvent, date?: Date) => {
-    if (Platform.OS === 'android') setShowHospitalPicker(false)
-    if (e.type === 'set' && date) setHospitalLastDate(date)
-  }
-  const onSandDateChange = (e: DateTimePickerEvent, date?: Date) => {
-    if (Platform.OS === 'android') setShowSandPicker(false)
-    if (e.type === 'set' && date) setSandLastDate(date)
-  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -144,19 +209,17 @@ export default function AlarmScreen() {
 
       <BottomSheet visible={panel === 'hospital'} onClose={() => setPanel(null)} title="병원 방문 주기 설정">
         <Text style={styles.fieldLabel}>마지막 방문일</Text>
-        <TouchableOpacity style={styles.dateBtn} onPress={() => setShowHospitalPicker(true)}>
+        <TouchableOpacity style={[styles.dateBtn, showHospitalPicker && styles.dateBtnOpen]} onPress={() => setShowHospitalPicker(v => !v)}>
           <Feather name="calendar" size={15} color="#888" />
           <Text style={styles.dateBtnText}>{fmt(hospitalLastDate)}</Text>
+          <Feather name={showHospitalPicker ? 'chevron-up' : 'chevron-down'} size={14} color="#aaa" />
         </TouchableOpacity>
         {showHospitalPicker && (
-          <DateTimePicker value={hospitalLastDate} mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            maximumDate={new Date()} onChange={onHospitalDateChange} style={styles.datePicker} />
-        )}
-        {Platform.OS === 'ios' && showHospitalPicker && (
-          <TouchableOpacity style={styles.confirmBtn} onPress={() => setShowHospitalPicker(false)}>
-            <Text style={styles.confirmBtnText}>확인</Text>
-          </TouchableOpacity>
+          <CalendarDropdown
+            value={hospitalLastDate}
+            max={new Date()}
+            onChange={date => { setHospitalLastDate(date); setShowHospitalPicker(false) }}
+          />
         )}
         <Text style={[styles.fieldLabel, { marginTop: 16 }]}>방문 주기</Text>
         <View style={styles.cycleRow}>
@@ -187,19 +250,17 @@ export default function AlarmScreen() {
 
       <BottomSheet visible={panel === 'sand'} onClose={() => setPanel(null)} title="화장실 모래 교체 설정">
         <Text style={styles.fieldLabel}>마지막 교체일</Text>
-        <TouchableOpacity style={styles.dateBtn} onPress={() => setShowSandPicker(true)}>
+        <TouchableOpacity style={[styles.dateBtn, showSandPicker && styles.dateBtnOpen]} onPress={() => setShowSandPicker(v => !v)}>
           <Feather name="calendar" size={15} color="#888" />
           <Text style={styles.dateBtnText}>{fmt(sandLastDate)}</Text>
+          <Feather name={showSandPicker ? 'chevron-up' : 'chevron-down'} size={14} color="#aaa" />
         </TouchableOpacity>
         {showSandPicker && (
-          <DateTimePicker value={sandLastDate} mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            maximumDate={new Date()} onChange={onSandDateChange} style={styles.datePicker} />
-        )}
-        {Platform.OS === 'ios' && showSandPicker && (
-          <TouchableOpacity style={styles.confirmBtn} onPress={() => setShowSandPicker(false)}>
-            <Text style={styles.confirmBtnText}>확인</Text>
-          </TouchableOpacity>
+          <CalendarDropdown
+            value={sandLastDate}
+            max={new Date()}
+            onChange={date => { setSandLastDate(date); setShowSandPicker(false) }}
+          />
         )}
         <Text style={[styles.fieldLabel, { marginTop: 16 }]}>교체 주기</Text>
         <View style={styles.cycleRow}>
@@ -278,10 +339,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F7F7', borderRadius: 10,
     paddingHorizontal: 16, paddingVertical: 13, borderWidth: 0.5, borderColor: '#E5E5E5',
   },
-  dateBtnText: { fontSize: 15, color: '#1a1a1a' },
-  datePicker: { marginTop: 8 },
-  confirmBtn: { backgroundColor: '#E9785A', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 8 },
-  confirmBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  dateBtnOpen: { borderColor: '#E9785A', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  dateBtnText: { fontSize: 15, color: '#1a1a1a', flex: 1 },
   cycleRow: { flexDirection: 'row', gap: 8 },
   cycleBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 0.5, borderColor: '#E5E5E5', alignItems: 'center' },
   cycleBtnActive: { backgroundColor: '#E9785A', borderColor: '#E9785A' },
@@ -293,4 +352,25 @@ const styles = StyleSheet.create({
   nextDateDday: { fontSize: 13, fontWeight: '700' },
   linkBtnFull: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E1F5EE', borderRadius: 10, padding: 13, marginBottom: 8 },
   linkBtnFullText: { fontSize: 13, color: '#1D9E75', fontWeight: '500' },
+})
+
+const calStyles = StyleSheet.create({
+  container: {
+    borderWidth: 0.5, borderColor: '#E9785A', borderTopWidth: 0,
+    borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
+    backgroundColor: '#fff', paddingHorizontal: 8, paddingBottom: 8, marginBottom: 4,
+  },
+  nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+  navBtn: { padding: 4 },
+  navTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  weekRow: { flexDirection: 'row', marginBottom: 4 },
+  weekLabel: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '600', color: '#999', paddingVertical: 4 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 100 },
+  cellSel: { backgroundColor: '#E9785A' },
+  dayText: { fontSize: 13, color: '#333' },
+  dayTextSel: { color: '#fff', fontWeight: '700' },
+  dayTextDis: { color: '#ddd' },
+  sun: { color: '#E9785A' },
+  sat: { color: '#5B8ECC' },
 })
