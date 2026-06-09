@@ -330,55 +330,46 @@ export default function HomeScreen() {
         {/* 생년월일 */}
         <Text style={[styles.fieldLabel, { marginTop: 14 }]}>생년월일</Text>
         <View style={styles.birthDropRow}>
-          {/* 연도 */}
-          <View style={styles.birthDropWrap}>
-            <TouchableOpacity style={styles.birthDropBtn} onPress={() => setOpenDrop(openDrop === 'year' ? null : 'year')}>
-              <Text style={[styles.birthDropText, !birth.y && { color: '#bbb' }]}>{birth.y || '연도'}</Text>
-              <Feather name={openDrop === 'year' ? 'chevron-up' : 'chevron-down'} size={13} color="#aaa" />
-            </TouchableOpacity>
-            {openDrop === 'year' && (
-              <ScrollView style={styles.birthDropList} nestedScrollEnabled>
-                {YEARS.map(y => (
-                  <TouchableOpacity key={y} style={[styles.birthDropItem, birth.y === y && styles.birthDropItemSel]} onPress={() => setBirthPart('y', y)}>
-                    <Text style={[styles.birthDropItemText, birth.y === y && styles.birthDropItemTextSel]}>{y}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-          {/* 월 */}
-          <View style={styles.birthDropWrap}>
-            <TouchableOpacity style={styles.birthDropBtn} onPress={() => setOpenDrop(openDrop === 'month' ? null : 'month')}>
-              <Text style={[styles.birthDropText, !birth.m && { color: '#bbb' }]}>{birth.m || '월'}</Text>
-              <Feather name={openDrop === 'month' ? 'chevron-up' : 'chevron-down'} size={13} color="#aaa" />
-            </TouchableOpacity>
-            {openDrop === 'month' && (
-              <ScrollView style={styles.birthDropList} nestedScrollEnabled>
-                {MONTHS.map(m => (
-                  <TouchableOpacity key={m} style={[styles.birthDropItem, birth.m === m && styles.birthDropItemSel]} onPress={() => setBirthPart('m', m)}>
-                    <Text style={[styles.birthDropItemText, birth.m === m && styles.birthDropItemTextSel]}>{m}월</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-          {/* 일 */}
-          <View style={styles.birthDropWrap}>
-            <TouchableOpacity style={styles.birthDropBtn} onPress={() => setOpenDrop(openDrop === 'day' ? null : 'day')}>
-              <Text style={[styles.birthDropText, !birth.d && { color: '#bbb' }]}>{birth.d || '일'}</Text>
-              <Feather name={openDrop === 'day' ? 'chevron-up' : 'chevron-down'} size={13} color="#aaa" />
-            </TouchableOpacity>
-            {openDrop === 'day' && (
-              <ScrollView style={styles.birthDropList} nestedScrollEnabled>
-                {DAYS.map(d => (
-                  <TouchableOpacity key={d} style={[styles.birthDropItem, birth.d === d && styles.birthDropItemSel]} onPress={() => setBirthPart('d', d)}>
-                    <Text style={[styles.birthDropItemText, birth.d === d && styles.birthDropItemTextSel]}>{d}일</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </View>
+          <TouchableOpacity style={[styles.birthDropBtn, openDrop === 'year' && styles.birthDropBtnOpen]} onPress={() => setOpenDrop(openDrop === 'year' ? null : 'year')}>
+            <Text style={[styles.birthDropText, !birth.y && { color: '#bbb' }]}>{birth.y || '연도'}</Text>
+            <Feather name={openDrop === 'year' ? 'chevron-up' : 'chevron-down'} size={13} color="#aaa" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.birthDropBtn, openDrop === 'month' && styles.birthDropBtnOpen]} onPress={() => setOpenDrop(openDrop === 'month' ? null : 'month')}>
+            <Text style={[styles.birthDropText, !birth.m && { color: '#bbb' }]}>{birth.m || '월'}</Text>
+            <Feather name={openDrop === 'month' ? 'chevron-up' : 'chevron-down'} size={13} color="#aaa" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.birthDropBtn, openDrop === 'day' && styles.birthDropBtnOpen]} onPress={() => setOpenDrop(openDrop === 'day' ? null : 'day')}>
+            <Text style={[styles.birthDropText, !birth.d && { color: '#bbb' }]}>{birth.d || '일'}</Text>
+            <Feather name={openDrop === 'day' ? 'chevron-up' : 'chevron-down'} size={13} color="#aaa" />
+          </TouchableOpacity>
         </View>
+        {openDrop === 'year' && (
+          <ScrollView style={styles.birthDropList} nestedScrollEnabled>
+            {YEARS.map(y => (
+              <TouchableOpacity key={y} style={[styles.birthDropItem, birth.y === y && styles.birthDropItemSel]} onPress={() => setBirthPart('y', y)}>
+                <Text style={[styles.birthDropItemText, birth.y === y && styles.birthDropItemTextSel]}>{y}년</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+        {openDrop === 'month' && (
+          <ScrollView style={styles.birthDropList} nestedScrollEnabled>
+            {MONTHS.map(m => (
+              <TouchableOpacity key={m} style={[styles.birthDropItem, birth.m === m && styles.birthDropItemSel]} onPress={() => setBirthPart('m', m)}>
+                <Text style={[styles.birthDropItemText, birth.m === m && styles.birthDropItemTextSel]}>{m}월</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+        {openDrop === 'day' && (
+          <ScrollView style={styles.birthDropList} nestedScrollEnabled>
+            {DAYS.map(d => (
+              <TouchableOpacity key={d} style={[styles.birthDropItem, birth.d === d && styles.birthDropItemSel]} onPress={() => setBirthPart('d', d)}>
+                <Text style={[styles.birthDropItemText, birth.d === d && styles.birthDropItemTextSel]}>{d}일</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
         {form.birthDate && (
           <Text style={styles.birthCalcText}>만 {calcAge(form.birthDate)}살</Text>
         )}
@@ -558,21 +549,21 @@ const styles = StyleSheet.create({
   halfField: { flex: 1 },
 
   birthDropRow: { flexDirection: 'row', gap: 8 },
-  birthDropWrap: { flex: 1, position: 'relative' },
   birthDropBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#F7F7F7', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 12,
     borderWidth: 0.5, borderColor: '#E5E5E5',
   },
+  birthDropBtnOpen: { borderColor: '#E9785A', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
   birthDropText: { fontSize: 14, color: '#1a1a1a', flex: 1 },
   birthDropList: {
-    position: 'absolute', top: 44, left: 0, right: 0, zIndex: 100,
-    backgroundColor: '#fff', borderRadius: 10, borderWidth: 0.5, borderColor: '#E5E5E5',
-    maxHeight: 180, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    maxHeight: 160,
+    backgroundColor: '#fff', borderRadius: 10, borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
+    borderWidth: 0.5, borderColor: '#E9785A', marginTop: 2,
   },
-  birthDropItem: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F0F0F0' },
+  birthDropItem: { paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 0.5, borderBottomColor: '#F0F0F0' },
   birthDropItemSel: { backgroundColor: '#FFF0EC' },
-  birthDropItemText: { fontSize: 13, color: '#1a1a1a' },
+  birthDropItemText: { fontSize: 14, color: '#1a1a1a' },
   birthDropItemTextSel: { color: '#E9785A', fontWeight: '700' },
   birthCalcText: { fontSize: 12, color: '#1D9E75', fontWeight: '600', marginTop: 8, textAlign: 'right' },
 
