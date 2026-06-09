@@ -147,7 +147,7 @@ export default function MedicationSection() {
       <BottomSheet visible={panelOpen} onClose={() => setPanelOpen(false)} title={editTarget ? '투약 수정' : '투약 추가'}>
 
         <Text style={styles.fieldLabel}>약 이름</Text>
-        <TextInput style={styles.input} placeholder="예: 비타민 B complex, 아목시실린"
+        <TextInput style={styles.input} placeholder="예: 레나메진, 아조딜 등"
           placeholderTextColor="#bbb" value={form.name}
           onChangeText={v => setForm(f => ({ ...f, name: v }))} />
 
