@@ -25,7 +25,7 @@ export default function AppTabs() {
     <Tabs style={styles.container}>
       <View style={styles.header}>
         <View style={styles.logoIcon}>
-          <FontAwesome5 name="cat" size={21} color="#E9785A" />
+          <FontAwesome5 name="cat" size={24} color="#E9785A" />
         </View>
         <Text style={styles.brand}>CatsCare</Text>
       </View>
@@ -67,8 +67,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5, borderBottomColor: '#E5E5E5', backgroundColor: '#fff',
   },
   logoIcon: {
-    width: 28, height: 28,
+    width: 30, height: 30,
     alignItems: 'center', justifyContent: 'center',
+    transform: [{ translateY: 2 }],
   },
   brand: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', lineHeight: 22 },
   slot: { flex: 1 },
