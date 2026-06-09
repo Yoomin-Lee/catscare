@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native'
 import { useState } from 'react'
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
 import { supabase } from '@/lib/supabase'
 
 export default function LoginScreen({ onGuest }: { onGuest?: () => void }) {
@@ -46,8 +47,14 @@ export default function LoginScreen({ onGuest }: { onGuest?: () => void }) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.hero}>
-        <Text style={styles.catEmoji}>🐱</Text>
-        <Text style={styles.title}>CatsCare</Text>
+        <View style={styles.logoBadge}>
+          <FontAwesome5 name="cat" size={40} color="#fff" style={{ transform: [{ translateY: 3 }] }} />
+        </View>
+        <View style={styles.titleRow}>
+          <Text style={styles.titleCats}>Cats</Text>
+          <Text style={styles.titleCare}>Care</Text>
+          <Text style={styles.titlePaw}>🐾</Text>
+        </View>
         <Text style={styles.subtitle}>우리 고양이의 생애를 기록해요</Text>
       </View>
 
@@ -127,15 +134,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 36,
   },
-  catEmoji: {
-    fontSize: 72,
-    marginBottom: 10,
+  logoBadge: {
+    width: 88,
+    height: 88,
+    backgroundColor: '#E9785A',
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: '#E9785A',
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1a1a1a',
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  titleCats: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#E9785A',
     letterSpacing: -0.5,
+  },
+  titleCare: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#1D9E75',
+    letterSpacing: -0.5,
+  },
+  titlePaw: {
+    fontSize: 18,
+    marginLeft: 4,
+    opacity: 0.8,
   },
   subtitle: {
     fontSize: 14,

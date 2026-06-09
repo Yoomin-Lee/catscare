@@ -24,10 +24,14 @@ export default function AppTabs() {
   return (
     <Tabs style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.logoIcon}>
-          <FontAwesome5 name="cat" size={24} color="#E9785A" />
+        <View style={styles.logoBadge}>
+          <FontAwesome5 name="cat" size={18} color="#fff" style={{ transform: [{ translateY: 1 }] }} />
         </View>
-        <Text style={styles.brand}>CatsCare</Text>
+        <Text style={styles.brand}>
+          <Text style={styles.brandCats}>Cats</Text>
+          <Text style={styles.brandCare}>Care</Text>
+        </Text>
+        <Text style={styles.brandPaw}>🐾</Text>
       </View>
       <TabSlot style={styles.slot} />
       <TabList asChild>
@@ -66,12 +70,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 14,
     borderBottomWidth: 0.5, borderBottomColor: '#E5E5E5', backgroundColor: '#fff',
   },
-  logoIcon: {
-    width: 30, height: 30,
+  logoBadge: {
+    width: 34, height: 34,
+    backgroundColor: '#E9785A',
+    borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
-    transform: [{ translateY: 2 }],
+    shadowColor: '#E9785A',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
   },
-  brand: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', lineHeight: 22 },
+  brand: { fontSize: 18, lineHeight: 22 },
+  brandCats: { fontSize: 18, fontWeight: '800', color: '#E9785A' },
+  brandCare: { fontSize: 18, fontWeight: '800', color: '#1D9E75' },
+  brandPaw: { fontSize: 13, marginLeft: 2, opacity: 0.7 },
   slot: { flex: 1 },
   tabBar: {
     flexDirection: 'row', backgroundColor: '#fff',
