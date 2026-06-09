@@ -11,7 +11,7 @@ import {
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
-export default function LoginScreen() {
+export default function LoginScreen({ onGuest }: { onGuest?: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -103,6 +103,12 @@ export default function LoginScreen() {
                 {isSignUp ? '이미 계정이 있어요 · 로그인' : '처음이신가요? · 회원가입'}
               </Text>
             </TouchableOpacity>
+
+            {onGuest && !isSignUp && (
+              <TouchableOpacity style={styles.guestBtn} onPress={onGuest}>
+                <Text style={styles.guestText}>로그인 없이 둘러보기</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
       </View>
@@ -190,6 +196,17 @@ const styles = StyleSheet.create({
     color: '#E9785A',
     fontSize: 13,
     fontWeight: '500',
+  },
+  guestBtn: {
+    alignItems: 'center',
+    marginTop: 20,
+    paddingVertical: 12,
+    borderTopWidth: 0.5,
+    borderTopColor: '#F0F0F0',
+  },
+  guestText: {
+    color: '#aaa',
+    fontSize: 13,
   },
   successBox: {
     alignItems: 'center',

@@ -13,6 +13,7 @@ import LoginScreen from '@/components/login-screen'
 export default function RootLayout() {
   const colorScheme = useColorScheme()
   const [session, setSession] = useState<Session | null | undefined>(undefined)
+  const [guestMode, setGuestMode] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -21,6 +22,7 @@ export default function RootLayout() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      if (session) setGuestMode(false)
     })
 
     return () => subscription.unsubscribe()
@@ -31,7 +33,7 @@ export default function RootLayout() {
   const content = (
     <CatsProvider>
       <AnimatedSplashOverlay />
-      {(__DEV__ || session) ? <AppTabs /> : <LoginScreen />}
+      {(__DEV__ || session || guestMode) ? <AppTabs /> : <LoginScreen onGuest={() => setGuestMode(true)} />}
     </CatsProvider>
   )
 
