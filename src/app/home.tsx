@@ -43,7 +43,7 @@ function catSubtitle(cat: Cat) {
 }
 
 function emptyForm(): Omit<Cat, 'id'> {
-  return { name: '', breed: '', ageYears: 0, birthDate: undefined, weightKg: 3.0, gender: 'female', neutered: false, photoUri: undefined }
+  return { name: '', breed: '', ageYears: 0, birthDate: undefined, weightKg: 0, gender: 'female', neutered: false, photoUri: undefined }
 }
 
 function CatAvatarDisplay({ cat, size }: { cat: Cat; size: number }) {
@@ -86,7 +86,7 @@ export default function HomeScreen() {
     const ef = emptyForm()
     setForm(ef); setEditId(null); setBreedOption(''); setShowBreedList(false)
     setBirthY(''); setBirthM(''); setBirthD(''); setOpenDrop(null)
-    setWeightText(String(ef.weightKg)); setSheetMode('add')
+    setWeightText(''); setSheetMode('add')
   }
   const openEdit = (cat: Cat) => {
     setForm({ name: cat.name, breed: cat.breed, ageYears: cat.ageYears, birthDate: cat.birthDate, weightKg: cat.weightKg, gender: cat.gender, neutered: cat.neutered, photoUri: cat.photoUri })

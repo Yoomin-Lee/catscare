@@ -244,6 +244,21 @@ logoIcon: {
 - 벤토나이트 모래 링크를 네이버 검색에서 쿠팡 직링크로 변경
 - `Linking.openURL` 연결 + 외부 링크 아이콘 추가
 
+### 22. 투약 약이름 플레이스홀더 변경
+**파일:** `src/components/medication-section.tsx`
+
+- 약이름 입력 필드 placeholder `"약 이름을 입력하세요"` → `"예: 레나메진, 아조딜 등"` 변경
+- 실제 사용 예시를 제시해 UX 개선
+
+### 23. 체중 입력 플레이스홀더 변경 및 기본값 버그 수정
+**파일:** `src/app/home.tsx`
+
+- 체중 필드 placeholder `"3.00"` → `"0.00kg"` 로 변경 (단위 포함)
+- **버그 수정:** `emptyForm()`의 `weightKg: 3.0` 기본값이 `weightText` state에 그대로 반영되어 신규 고양이 추가 시 placeholder가 보이지 않고 "3"이 표시되는 문제 해결
+  - `emptyForm()`: `weightKg: 3.0` → `weightKg: 0`
+  - `openAdd()`: `setWeightText(String(ef.weightKg))` → `setWeightText('')`
+  - 이제 신규 추가 폼에서 placeholder `"0.00kg"` 정상 표시
+
 ---
 
 ## 남은 작업 (TODO)
