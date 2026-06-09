@@ -105,6 +105,16 @@ function CalendarDropdown({ value, max, onChange }: {
   )
 }
 
+function relTime(date: Date): string {
+  const diff = Math.round((Date.now() - date.getTime()) / 86400000)
+  if (diff === 0) return '오늘'
+  if (diff === 1) return '어제'
+  if (diff < 7) return `${diff}일 전`
+  if (diff < 30) return `${Math.floor(diff / 7)}주 전`
+  if (diff < 365) return `${Math.floor(diff / 30)}개월 전`
+  return `${Math.floor(diff / 365)}년 전`
+}
+
 function getBadgeStyle(days: number) {
   if (days <= 3) return { bg: '#FAEEDA', text: '#BA7517' }
   if (days <= 14) return { bg: '#FAECE7', text: '#993C1D' }
@@ -117,8 +127,19 @@ export default function AlarmScreen() {
   const [hospitalCycle, setHospitalCycle] = useState(6)
   const [showHospitalPicker, setShowHospitalPicker] = useState(false)
   const [sandLastDate, setSandLastDate] = useState(new Date('2025-11-20'))
+  const [sandHistory, setSandHistory] = useState<Date[]>([new Date('2025-11-20')])
   const [sandCycle, setSandCycle] = useState(4)
   const [showSandPicker, setShowSandPicker] = useState(false)
+
+  const recordSand = (date: Date) => {
+    setSandLastDate(date)
+    setSandHistory(prev => {
+      const key = fmt(date)
+      const deduped = prev.filter(d => fmt(d) !== key)
+      return [date, ...deduped].sort((a, b) => b.getTime() - a.getTime())
+    })
+    setShowSandPicker(false)
+  }
   const [alarms, setAlarms] = useState({ hospital: true, sand: true, medication: false })
   const toggle = (key: keyof typeof alarms) => setAlarms(p => ({ ...p, [key]: !p[key] }))
   const [panel, setPanel] = useState<'hospital' | 'sand' | null>(null)
@@ -150,36 +171,44 @@ export default function AlarmScreen() {
         <Text style={styles.sectionTitle}>다가오는 일정</Text>
 
         <TouchableOpacity style={styles.alarmCard} onPress={() => setPanel('hospital')}>
-          <View style={[styles.alarmIcon, { backgroundColor: '#FAECE7' }]}>
-            <Feather name="activity" size={18} color="#E9785A" />
-          </View>
-          <View style={styles.alarmBody}>
-            <Text style={styles.alarmTitle}>정기 병원 방문</Text>
-            <Text style={styles.alarmSub}>마지막 방문: {fmt(hospitalLastDate)} · {hospitalCycle >= 12 ? `${hospitalCycle / 12}년` : `${hospitalCycle}개월`} 주기</Text>
-            <Text style={styles.nextDate}>다음 예정일: {fmt(nextHospital)}</Text>
-          </View>
-          <View style={[styles.badge, { backgroundColor: hospitalBadge.bg }]}>
-            <Text style={[styles.badgeText, { color: hospitalBadge.text }]}>
-              {hospitalDays >= 0 ? `D-${hospitalDays}` : `D+${Math.abs(hospitalDays)}`}
-            </Text>
+          <View style={styles.alarmCardMain}>
+            <View style={[styles.alarmIcon, { backgroundColor: '#FAECE7' }]}>
+              <Feather name="activity" size={18} color="#E9785A" />
+            </View>
+            <View style={styles.alarmBody}>
+              <Text style={styles.alarmTitle}>정기 병원 방문</Text>
+              <Text style={styles.alarmSub}>마지막 방문: {fmt(hospitalLastDate)} · {hospitalCycle >= 12 ? `${hospitalCycle / 12}년` : `${hospitalCycle}개월`} 주기</Text>
+              <Text style={styles.nextDate}>다음 예정일: {fmt(nextHospital)}</Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: hospitalBadge.bg }]}>
+              <Text style={[styles.badgeText, { color: hospitalBadge.text }]}>
+                {hospitalDays >= 0 ? `D-${hospitalDays}` : `D+${Math.abs(hospitalDays)}`}
+              </Text>
+            </View>
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.alarmCard} onPress={() => setPanel('sand')}>
-          <View style={[styles.alarmIcon, { backgroundColor: '#FAEEDA' }]}>
-            <Feather name="refresh-cw" size={18} color="#BA7517" />
-          </View>
-          <View style={styles.alarmBody}>
-            <Text style={styles.alarmTitle}>화장실 모래 전체 교체</Text>
-            <Text style={styles.alarmSub}>마지막 교체: {fmt(sandLastDate)} · {sandCycle}주 주기</Text>
-            <Text style={styles.nextDate}>다음 예정일: {fmt(nextSand)}</Text>
-          </View>
-          <View style={[styles.badge, { backgroundColor: sandBadge.bg }]}>
-            <Text style={[styles.badgeText, { color: sandBadge.text }]}>
-              {sandDays >= 0 ? `D-${sandDays}` : `D+${Math.abs(sandDays)}`}
-            </Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.alarmCard}>
+          <TouchableOpacity style={styles.alarmCardMain} onPress={() => setPanel('sand')}>
+            <View style={[styles.alarmIcon, { backgroundColor: '#FAEEDA' }]}>
+              <Feather name="refresh-cw" size={18} color="#BA7517" />
+            </View>
+            <View style={styles.alarmBody}>
+              <Text style={styles.alarmTitle}>화장실 모래 전체 교체</Text>
+              <Text style={styles.alarmSub}>마지막 교체: {fmt(sandLastDate)} · {sandCycle}주 주기</Text>
+              <Text style={styles.nextDate}>다음 예정일: {fmt(nextSand)}</Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: sandBadge.bg }]}>
+              <Text style={[styles.badgeText, { color: sandBadge.text }]}>
+                {sandDays >= 0 ? `D-${sandDays}` : `D+${Math.abs(sandDays)}`}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickLogBtn} onPress={() => recordSand(new Date())}>
+            <Feather name="check" size={13} color="#BA7517" />
+            <Text style={styles.quickLogText}>오늘 교체 완료</Text>
+          </TouchableOpacity>
+        </View>
 
         <Text style={styles.sectionTitle}>투약 알림</Text>
         <MedicationSection />
@@ -254,7 +283,7 @@ export default function AlarmScreen() {
           <CalendarDropdown
             value={sandLastDate}
             max={new Date()}
-            onChange={date => { setSandLastDate(date); setShowSandPicker(false) }}
+            onChange={recordSand}
           />
         )}
         <Text style={[styles.fieldLabel, { marginTop: 16 }]}>교체 주기</Text>
@@ -303,6 +332,16 @@ export default function AlarmScreen() {
             <Text style={styles.linkBtnFullText}>{item.label}</Text>
           </TouchableOpacity>
         ))}
+        <Text style={[styles.fieldLabel, { marginTop: 20 }]}>교체 기록</Text>
+        <View style={styles.historyList}>
+          {sandHistory.map((d, i) => (
+            <View key={i} style={[styles.historyItem, i < sandHistory.length - 1 && styles.historyBorder]}>
+              <View style={styles.historyDot} />
+              <Text style={styles.historyDate}>{fmt(d)}</Text>
+              <Text style={styles.historyRel}>{relTime(d)}</Text>
+            </View>
+          ))}
+        </View>
       </BottomSheet>
     </SafeAreaView>
   )
@@ -322,10 +361,18 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   sectionTitle: { fontSize: 11, fontWeight: '600', color: '#aaa', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10, marginTop: 4 },
   alarmCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 10,
-    borderWidth: 0.5, borderColor: '#EBEBEB',
+    backgroundColor: '#fff', borderRadius: 14, marginBottom: 10,
+    borderWidth: 0.5, borderColor: '#EBEBEB', overflow: 'hidden',
   },
+  alarmCardMain: {
+    flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16,
+  },
+  quickLogBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 9, borderTopWidth: 0.5, borderTopColor: '#F5EDD8',
+    backgroundColor: '#FFFBF2',
+  },
+  quickLogText: { fontSize: 13, color: '#BA7517', fontWeight: '600' },
   alarmIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   alarmBody: { flex: 1 },
   alarmTitle: { fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
@@ -379,6 +426,12 @@ const styles = StyleSheet.create({
   nextDateDday: { fontSize: 13, fontWeight: '700' },
   linkBtnFull: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E1F5EE', borderRadius: 10, padding: 13, marginBottom: 8 },
   linkBtnFullText: { fontSize: 13, color: '#1D9E75', fontWeight: '500' },
+  historyList: { borderRadius: 12, borderWidth: 0.5, borderColor: '#EBEBEB', overflow: 'hidden' },
+  historyItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: '#fff' },
+  historyBorder: { borderBottomWidth: 0.5, borderBottomColor: '#F5F5F5' },
+  historyDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#BA7517' },
+  historyDate: { flex: 1, fontSize: 14, color: '#1a1a1a' },
+  historyRel: { fontSize: 12, color: '#aaa' },
 })
 
 const calStyles = StyleSheet.create({
