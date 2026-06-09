@@ -258,21 +258,25 @@ export default function AlarmScreen() {
           />
         )}
         <Text style={[styles.fieldLabel, { marginTop: 16 }]}>교체 주기</Text>
-        <View style={{ gap: 8 }}>
-          {[SAND_CYCLES.slice(0, 5), SAND_CYCLES.slice(5)].map((row, ri) => (
-            <View key={ri} style={{ flexDirection: 'row', gap: 8 }}>
-              {row.map(c => (
-                <TouchableOpacity
-                  key={c.weeks}
-                  style={[styles.sandTab, sandCycle === c.weeks && styles.sandTabActive]}
-                  onPress={() => setSandCycle(c.weeks)}
-                >
-                  <Text style={[styles.sandTabNum, sandCycle === c.weeks && styles.sandTabNumActive]}>{c.weeks}</Text>
-                  <Text style={[styles.sandTabUnit, sandCycle === c.weeks && styles.sandTabUnitActive]}>주</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))}
+        <View style={styles.stepper}>
+          <TouchableOpacity
+            style={[styles.stepperBtn, sandCycle <= 1 && styles.stepperBtnDisabled]}
+            onPress={() => setSandCycle(v => Math.max(1, v - 1))}
+            disabled={sandCycle <= 1}
+          >
+            <Text style={[styles.stepperBtnText, sandCycle <= 1 && styles.stepperBtnTextDisabled]}>－</Text>
+          </TouchableOpacity>
+          <View style={styles.stepperValue}>
+            <Text style={styles.stepperNum}>{sandCycle}</Text>
+            <Text style={styles.stepperUnit}>주</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.stepperBtn, sandCycle >= 10 && styles.stepperBtnDisabled]}
+            onPress={() => setSandCycle(v => Math.min(10, v + 1))}
+            disabled={sandCycle >= 10}
+          >
+            <Text style={[styles.stepperBtnText, sandCycle >= 10 && styles.stepperBtnTextDisabled]}>＋</Text>
+          </TouchableOpacity>
         </View>
         <View style={styles.nextDateBox}>
           <Text style={styles.nextDateLabel}>다음 교체 예정일</Text>
@@ -348,16 +352,27 @@ const styles = StyleSheet.create({
   cycleBtnActive: { backgroundColor: '#E9785A', borderColor: '#E9785A' },
   cycleBtnText: { fontSize: 13, color: '#666', fontWeight: '500' },
   cycleBtnTextActive: { color: '#fff', fontWeight: '700' },
-  sandTab: {
-    flex: 1, paddingVertical: 10, borderRadius: 10,
+  stepper: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F7F7F7', borderRadius: 14,
     borderWidth: 0.5, borderColor: '#E5E5E5',
-    alignItems: 'center', justifyContent: 'center', gap: 1,
+    overflow: 'hidden',
   },
-  sandTabActive: { backgroundColor: '#BA7517', borderColor: '#BA7517' },
-  sandTabNum: { fontSize: 16, fontWeight: '700', color: '#555' },
-  sandTabNumActive: { color: '#fff' },
-  sandTabUnit: { fontSize: 10, color: '#aaa', fontWeight: '500' },
-  sandTabUnitActive: { color: 'rgba(255,255,255,0.8)' },
+  stepperBtn: {
+    width: 52, height: 52,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 0.5, borderColor: '#E5E5E5',
+  },
+  stepperBtnDisabled: { backgroundColor: '#F7F7F7' },
+  stepperBtnText: { fontSize: 22, color: '#BA7517', fontWeight: '300', lineHeight: 26 },
+  stepperBtnTextDisabled: { color: '#ccc' },
+  stepperValue: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row', gap: 4, paddingVertical: 14,
+  },
+  stepperNum: { fontSize: 28, fontWeight: '700', color: '#1a1a1a' },
+  stepperUnit: { fontSize: 14, fontWeight: '500', color: '#888', paddingTop: 6 },
   nextDateBox: { marginTop: 16, backgroundColor: '#FFF8F5', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 8 },
   nextDateLabel: { fontSize: 13, color: '#888' },
   nextDateValue: { fontSize: 14, fontWeight: '600', color: '#1a1a1a', flex: 1 },
