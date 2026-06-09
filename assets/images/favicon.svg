@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Left ear (black) -->
+  <polygon points="5,17 8,5 13,14" fill="#1a1a1a"/>
+  <!-- Right ear (black) -->
+  <polygon points="27,17 24,5 19,14" fill="#1a1a1a"/>
+  <!-- Inner left ear (pink) -->
+  <polygon points="6.5,15 8.5,8 11.5,13" fill="#F4A0B5"/>
+  <!-- Inner right ear (pink) -->
+  <polygon points="25.5,15 23.5,8 20.5,13" fill="#F4A0B5"/>
+  <!-- Head (black) -->
+  <ellipse cx="16" cy="20" rx="11" ry="10.5" fill="#1a1a1a"/>
+  <!-- White ㅗ forehead marking -->
+  <rect x="14.5" y="11" width="3" height="4.5" rx="1" fill="#ffffff"/>
+  <rect x="11" y="15" width="10" height="2" rx="1" fill="#ffffff"/>
+  <!-- White cheeks/muzzle -->
+  <ellipse cx="16" cy="22.5" rx="9" ry="5" fill="#ffffff"/>
+  <!-- Left eye (yellow, large) -->
+  <ellipse cx="11.5" cy="18.5" rx="3" ry="2.8" fill="#F5C518"/>
+  <!-- Right eye (yellow, large) -->
+  <ellipse cx="20.5" cy="18.5" rx="3" ry="2.8" fill="#F5C518"/>
+  <!-- Left pupil (vertical slit) -->
+  <ellipse cx="11.5" cy="18.5" rx="1.1" ry="2.1" fill="#222222"/>
+  <!-- Right pupil (vertical slit) -->
+  <ellipse cx="20.5" cy="18.5" rx="1.1" ry="2.1" fill="#222222"/>
+  <!-- Left eye shine -->
+  <circle cx="12.3" cy="17.5" r="0.7" fill="#ffffff"/>
+  <!-- Right eye shine -->
+  <circle cx="21.3" cy="17.5" r="0.7" fill="#ffffff"/>
+  <!-- Nose (pink) -->
+  <path d="M14.8,21.5 L16,20.3 L17.2,21.5 L16,22.5 Z" fill="#F4A0B5"/>
+  <!-- Black lower lip -->
+  <ellipse cx="16" cy="26" rx="5.5" ry="2.5" fill="#1a1a1a"/>
+</svg>

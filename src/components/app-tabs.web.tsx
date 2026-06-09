@@ -1,115 +1,90 @@
-import {
-  Tabs,
-  TabList,
-  TabTrigger,
-  TabSlot,
-  TabTriggerSlotProps,
-  TabListProps,
-} from 'expo-router/ui';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
+import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps } from 'expo-router/ui';
+import Feather from '@expo/vector-icons/Feather';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ExternalLink } from './external-link';
-import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
+type TabConfig = {
+  name: string;
+  href: string;
+  label: string;
+  iconName: string;
+  iconLib: 'Feather' | 'FontAwesome5';
+  iconSize?: number;
+}
 
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+const TABS: TabConfig[] = [
+  { name: 'alarm',    href: '/',         label: '주기 알람',   iconName: 'bell',       iconLib: 'Feather' },
+  { name: 'hospital', href: '/hospital', label: '병원 기록',   iconName: 'clipboard',  iconLib: 'Feather' },
+  { name: 'home',     href: '/home',     label: '홈',          iconName: 'home',        iconLib: 'Feather', iconSize: 22 },
+  { name: 'body',     href: '/body',     label: '체중/투약',   iconName: 'activity',   iconLib: 'Feather' },
+  { name: 'food',     href: '/food',     label: '식단/기호성', iconName: 'coffee',     iconLib: 'Feather' },
+];
 
 export default function AppTabs() {
   return (
-    <Tabs>
-      <TabSlot style={{ height: '100%' }} />
+    <Tabs style={styles.container}>
+      <View style={styles.header}>
+        <FontAwesome5 name="cat" size={16} color="#E9785A" />
+        <Text style={styles.brand}>CatsCare</Text>
+      </View>
+      <TabSlot style={styles.slot} />
       <TabList asChild>
-        <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
-            <TabButton>Home</TabButton>
-          </TabTrigger>
-          <TabTrigger name="explore" href="/explore" asChild>
-            <TabButton>Explore</TabButton>
-          </TabTrigger>
-        </CustomTabList>
+        <View style={styles.tabBar}>
+          {TABS.map(tab => (
+            <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
+              <TabButton tab={tab}>{tab.label}</TabButton>
+            </TabTrigger>
+          ))}
+        </View>
       </TabList>
     </Tabs>
   );
 }
 
-export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+function TabButton({ children, isFocused, tab, ...props }: TabTriggerSlotProps & { tab: TabConfig }) {
+  const color = isFocused ? '#E9785A' : '#aaa';
+  const size = tab.iconSize ?? 20;
+  const Icon = tab.iconLib === 'Feather' ? Feather : FontAwesome5;
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
-        <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
-          {children}
-        </ThemedText>
-      </ThemedView>
+    <Pressable {...props} style={[styles.tabButton, tab.name === 'home' && styles.tabButtonHome]}>
+      {tab.name === 'home' && isFocused && <View style={styles.homeActiveBg} />}
+      <Icon name={tab.iconName as any} size={size} color={color} />
+      <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
+        {children as string}
+      </Text>
+      {tab.name !== 'home' && isFocused && <View style={styles.activeBar} />}
     </Pressable>
   );
 }
 
-export function CustomTabList(props: TabListProps) {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
-  return (
-    <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          Expo Starter
-        </ThemedText>
-
-        {props.children}
-
-        <ExternalLink href="https://docs.expo.dev" asChild>
-          <Pressable style={styles.externalPressable}>
-            <ThemedText type="link">Docs</ThemedText>
-            <SymbolView
-              tintColor={colors.text}
-              name={{ ios: 'arrow.up.right.square', web: 'link' }}
-              size={12}
-            />
-          </Pressable>
-        </ExternalLink>
-      </ThemedView>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  tabListContainer: {
-    position: 'absolute',
-    width: '100%',
-    padding: Spacing.three,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
+  container: { flex: 1, backgroundColor: '#FFF8F5' },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12,
+    borderBottomWidth: 0.5, borderBottomColor: '#E5E5E5', backgroundColor: '#fff',
   },
-  innerContainer: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.five,
-    borderRadius: Spacing.five,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexGrow: 1,
-    gap: Spacing.two,
-    maxWidth: MaxContentWidth,
+  brand: { fontSize: 18, fontWeight: '600', color: '#1a1a1a' },
+  slot: { flex: 1 },
+  tabBar: {
+    flexDirection: 'row', backgroundColor: '#fff',
+    borderTopWidth: 0.5, borderTopColor: '#E5E5E5', paddingBottom: 8,
   },
-  brandText: {
-    marginRight: 'auto',
+  tabButton: {
+    flex: 1, alignItems: 'center', paddingTop: 10, paddingBottom: 4,
+    position: 'relative',
   },
-  pressed: {
-    opacity: 0.7,
+  tabButtonHome: {
+    flex: 1.2,
   },
-  tabButtonView: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+  homeActiveBg: {
+    position: 'absolute', top: 4, left: '20%', right: '20%', bottom: 4,
+    backgroundColor: '#FAECE7', borderRadius: 12,
   },
-  externalPressable: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing.one,
-    marginLeft: Spacing.three,
+  tabLabel: { fontSize: 10, color: '#aaa', fontWeight: '500', marginTop: 3 },
+  tabLabelActive: { color: '#E9785A', fontWeight: '700' },
+  activeBar: {
+    position: 'absolute', top: 0, left: '25%', right: '25%',
+    height: 2, backgroundColor: '#E9785A', borderRadius: 1,
   },
 });

@@ -1,56 +1,89 @@
-# Welcome to your Expo app 👋
+# CatsCare
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+고양이 건강 관리 앱 — 병원 일정, 투약, 체중, 식단을 한 곳에서.
 
-## Get started
+## 스크린 구성
 
-1. Install dependencies
+| 탭 | 화면 | 기능 |
+|---|---|---|
+| 주기 알람 | `src/app/index.tsx` | 병원 방문·모래 교체 D-day, 투약 알림 토글 |
+| 병원 기록 | `src/app/hospital.tsx` | 병원 방문 이력 |
+| 홈 | `src/app/home.tsx` | 고양이 프로필 CRUD, 사진 업로드 |
+| 체중/투약 | `src/app/body.tsx` | 체중 기록, 투약 스케줄 |
+| 식단/기호성 | `src/app/food.tsx` | 식단 메모, 기호성 평가 |
 
-   ```bash
-   npm install
-   ```
+## 아키텍처
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+src/
+├── app/               # Expo Router 파일 기반 라우팅
+│   ├── _layout.tsx    # Supabase 인증 게이트 + CatsProvider
+│   ├── index.tsx      # 주기 알람 (탭: 주기 알람)
+│   ├── home.tsx       # 고양이 관리 (탭: 홈)
+│   ├── hospital.tsx   # 병원 기록 (탭: 병원 기록)
+│   ├── body.tsx       # 체중/투약 (탭: 체중/투약)
+│   └── food.tsx       # 식단/기호성 (탭: 식단/기호성)
+├── components/
+│   ├── app-tabs.tsx        # 네이티브 탭 바
+│   ├── app-tabs.web.tsx    # 웹 전용 탭 바 (Expo Router UI)
+│   ├── bottom-sheet.tsx    # 설정 패널용 바텀시트
+│   ├── login-screen.tsx    # Supabase 이메일 로그인
+│   ├── medication-section.tsx  # 투약 알림 컴포넌트
+│   └── animated-icon.tsx   # 스플래시 애니메이션
+└── lib/
+    ├── cats-context.tsx    # 멀티캣 전역 상태 (Context API)
+    └── supabase.ts         # Supabase 클라이언트
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## 핵심 기능
 
-### Other setup steps
+- **멀티캣 지원** — CatsContext에서 고양이 CRUD, 품종/이름 기반 아바타 색상 자동 배정
+- **D-day 뱃지** — 3일 이내 주황, 14일 이내 빨강, 이후 초록으로 색상 구분
+- **병원/모래 주기 설정** — 바텀시트에서 마지막 날짜 + 주기 선택 → 다음 예정일 자동 계산
+- **투약 관리** — 반복 일정, 알림 토글
+- **Supabase 인증** — 이메일 로그인, 세션 자동 갱신, 개발 모드(DEV)에서는 로그인 생략
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## 기술 스택
 
-## Learn more
+- **Expo ~56** + Expo Router ~56.2 (파일 기반 라우팅)
+- **React 19** / React Native 0.85
+- **TypeScript** + React Compiler
+- **Supabase** — 인증 및 백엔드
+- **expo-image-picker** — 고양이 프로필 사진
+- **@react-native-community/datetimepicker** — 날짜 선택
+- **react-native-reanimated 4** + **react-native-gesture-handler** — 애니메이션
 
-To learn more about developing your project with Expo, look at the following resources:
+## 실행
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm install
+npm run web       # 웹 브라우저 (localhost:8081)
+npm run android   # Android
+npm run ios       # iOS
+```
 
-## Join the community
+## 빌드 & 배포 (웹)
 
-Join our community of developers creating universal apps.
+```bash
+npx expo export --platform web   # dist/ 폴더에 정적 파일 생성
+# GitHub Pages: gh-pages 브랜치에 dist/ 내용 배포
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 개발 노트
+
+### 2026-06-07
+- 프로젝트 초기 설정 (Expo 56, Expo Router, TypeScript)
+- Supabase 연동, 로그인 화면 구현
+
+### 2026-06-08
+- **홈 탭**: 고양이 프로필 CRUD + 사진 업로드 (`home.tsx`)
+- **주기 알람 탭**: 병원 방문·모래 교체 D-day 카운트다운, 투약 알림 (`index.tsx`)
+- **CatsContext**: 멀티캣 전역 상태 관리 (`cats-context.tsx`)
+- **MedicationSection**: 투약 스케줄 컴포넌트
+- **BottomSheet**: 날짜·주기 설정 패널
+- 웹 전용 탭 바 분리 (`app-tabs.web.tsx`)
+- 병원 기록, 체중/투약, 식단/기호성 탭 추가
+
+### 2026-06-09
+- 고양이 파비콘 적용
+- 개발노트 작성 및 GitHub 배포
