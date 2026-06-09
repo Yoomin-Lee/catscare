@@ -7,6 +7,24 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import { useCats, catAvatarColor, type Cat } from '@/lib/cats-context'
 
+const NOW = new Date()
+const YEARS = Array.from({ length: 30 }, (_, i) => String(NOW.getFullYear() - i))
+const MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
+const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'))
+
+function calcAge(birthDate: string): number {
+  const [y, m, d] = birthDate.split('.').map(Number)
+  if (!y || !m || !d) return 0
+  let age = NOW.getFullYear() - y
+  if (NOW.getMonth() + 1 < m || (NOW.getMonth() + 1 === m && NOW.getDate() < d)) age--
+  return Math.max(0, age)
+}
+
+function parseBirth(birthDate?: string) {
+  const parts = birthDate?.split('.') ?? []
+  return { y: parts[0] ?? '', m: parts[1] ?? '', d: parts[2] ?? '' }
+}
+
 const GENDER_COLORS = { female: '#E9785A', male: '#534AB7' }
 
 const BREEDS = [
@@ -16,11 +34,13 @@ const BREEDS = [
 ]
 
 function catSubtitle(cat: Cat) {
-  return `${cat.breed} · ${cat.ageYears}살 · ${cat.weightKg}kg`
+  const age = cat.birthDate ? calcAge(cat.birthDate) : cat.ageYears
+  const birthStr = cat.birthDate ? ` (${cat.birthDate})` : ''
+  return `${cat.breed} · ${age}살${birthStr} · ${cat.weightKg}kg`
 }
 
 function emptyForm(): Omit<Cat, 'id'> {
-  return { name: '', breed: '', ageYears: 1, weightKg: 3.0, gender: 'female', neutered: false, photoUri: undefined }
+  return { name: '', breed: '', ageYears: 0, birthDate: undefined, weightKg: 3.0, gender: 'female', neutered: false, photoUri: undefined }
 }
 
 function CatAvatarDisplay({ cat, size }: { cat: Cat; size: number }) {
@@ -43,14 +63,27 @@ export default function HomeScreen() {
   const [editId, setEditId] = useState<string | null>(null)
   const [showBreedList, setShowBreedList] = useState(false)
   const [breedOption, setBreedOption] = useState('')
+  const [birthMode, setBirthMode] = useState<'date' | 'age'>('date')
+  const [openDrop, setOpenDrop] = useState<'year' | 'month' | 'day' | null>(null)
+
+  const birth = parseBirth(form.birthDate)
+
+  const setBirthPart = (part: 'y' | 'm' | 'd', val: string) => {
+    const next = { ...parseBirth(form.birthDate), [part]: val }
+    const dateStr = next.y && next.m && next.d ? `${next.y}.${next.m}.${next.d}` : undefined
+    setForm(f => ({ ...f, birthDate: dateStr, ageYears: dateStr ? calcAge(dateStr) : f.ageYears }))
+    setOpenDrop(null)
+  }
 
   const openAdd = () => {
-    setForm(emptyForm()); setEditId(null); setBreedOption(''); setShowBreedList(false); setSheetMode('add')
+    setForm(emptyForm()); setEditId(null); setBreedOption(''); setShowBreedList(false)
+    setBirthMode('date'); setOpenDrop(null); setSheetMode('add')
   }
   const openEdit = (cat: Cat) => {
-    setForm({ name: cat.name, breed: cat.breed, ageYears: cat.ageYears, weightKg: cat.weightKg, gender: cat.gender, neutered: cat.neutered, photoUri: cat.photoUri })
+    setForm({ name: cat.name, breed: cat.breed, ageYears: cat.ageYears, birthDate: cat.birthDate, weightKg: cat.weightKg, gender: cat.gender, neutered: cat.neutered, photoUri: cat.photoUri })
     setBreedOption(BREEDS.includes(cat.breed) ? cat.breed : (cat.breed ? '기타' : ''))
-    setShowBreedList(false); setEditId(cat.id); setSheetMode('edit')
+    setBirthMode(cat.birthDate ? 'date' : 'age')
+    setShowBreedList(false); setOpenDrop(null); setEditId(cat.id); setSheetMode('edit')
   }
   const selectBreed = (breed: string) => {
     setBreedOption(breed)
@@ -296,14 +329,87 @@ export default function HomeScreen() {
           />
         )}
 
-        <View style={styles.rowFields}>
-          <View style={styles.halfField}>
-            <Text style={styles.fieldLabel}>나이 (살)</Text>
-            <TextInput style={styles.input} placeholder="1" placeholderTextColor="#bbb"
-              keyboardType="numeric" value={String(form.ageYears)}
-              onChangeText={v => setForm(f => ({ ...f, ageYears: Number(v) || 1 }))} />
+        {/* 생년월일 / 나이 토글 */}
+        <View style={styles.birthToggleRow}>
+          <TouchableOpacity
+            style={[styles.birthToggleBtn, birthMode === 'date' && styles.birthToggleBtnActive]}
+            onPress={() => { setBirthMode('date'); setOpenDrop(null) }}>
+            <Text style={[styles.birthToggleText, birthMode === 'date' && styles.birthToggleTextActive]}>생년월일</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.birthToggleBtn, birthMode === 'age' && styles.birthToggleBtnActive]}
+            onPress={() => setBirthMode('age')}>
+            <Text style={[styles.birthToggleText, birthMode === 'age' && styles.birthToggleTextActive]}>나이 직접입력</Text>
+          </TouchableOpacity>
+        </View>
+
+        {birthMode === 'date' ? (
+          <View>
+            <View style={styles.birthDropRow}>
+              {/* 연도 */}
+              <View style={styles.birthDropWrap}>
+                <TouchableOpacity style={styles.birthDropBtn} onPress={() => setOpenDrop(openDrop === 'year' ? null : 'year')}>
+                  <Text style={[styles.birthDropText, !birth.y && { color: '#bbb' }]}>{birth.y || '연도'}</Text>
+                  <Feather name={openDrop === 'year' ? 'chevron-up' : 'chevron-down'} size={13} color="#aaa" />
+                </TouchableOpacity>
+                {openDrop === 'year' && (
+                  <ScrollView style={styles.birthDropList} nestedScrollEnabled>
+                    {YEARS.map(y => (
+                      <TouchableOpacity key={y} style={[styles.birthDropItem, birth.y === y && styles.birthDropItemSel]} onPress={() => setBirthPart('y', y)}>
+                        <Text style={[styles.birthDropItemText, birth.y === y && styles.birthDropItemTextSel]}>{y}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+              {/* 월 */}
+              <View style={styles.birthDropWrap}>
+                <TouchableOpacity style={styles.birthDropBtn} onPress={() => setOpenDrop(openDrop === 'month' ? null : 'month')}>
+                  <Text style={[styles.birthDropText, !birth.m && { color: '#bbb' }]}>{birth.m || '월'}</Text>
+                  <Feather name={openDrop === 'month' ? 'chevron-up' : 'chevron-down'} size={13} color="#aaa" />
+                </TouchableOpacity>
+                {openDrop === 'month' && (
+                  <ScrollView style={styles.birthDropList} nestedScrollEnabled>
+                    {MONTHS.map(m => (
+                      <TouchableOpacity key={m} style={[styles.birthDropItem, birth.m === m && styles.birthDropItemSel]} onPress={() => setBirthPart('m', m)}>
+                        <Text style={[styles.birthDropItemText, birth.m === m && styles.birthDropItemTextSel]}>{m}월</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+              {/* 일 */}
+              <View style={styles.birthDropWrap}>
+                <TouchableOpacity style={styles.birthDropBtn} onPress={() => setOpenDrop(openDrop === 'day' ? null : 'day')}>
+                  <Text style={[styles.birthDropText, !birth.d && { color: '#bbb' }]}>{birth.d || '일'}</Text>
+                  <Feather name={openDrop === 'day' ? 'chevron-up' : 'chevron-down'} size={13} color="#aaa" />
+                </TouchableOpacity>
+                {openDrop === 'day' && (
+                  <ScrollView style={styles.birthDropList} nestedScrollEnabled>
+                    {DAYS.map(d => (
+                      <TouchableOpacity key={d} style={[styles.birthDropItem, birth.d === d && styles.birthDropItemSel]} onPress={() => setBirthPart('d', d)}>
+                        <Text style={[styles.birthDropItemText, birth.d === d && styles.birthDropItemTextSel]}>{d}일</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            </View>
+            {form.birthDate && (
+              <Text style={styles.birthCalcText}>만 {calcAge(form.birthDate)}살</Text>
+            )}
           </View>
-          <View style={styles.halfField}>
+        ) : (
+          <View style={styles.ageDirectRow}>
+            <TextInput style={[styles.input, { flex: 1 }]} placeholder="0" placeholderTextColor="#bbb"
+              keyboardType="numeric" value={form.ageYears > 0 ? String(form.ageYears) : ''}
+              onChangeText={v => setForm(f => ({ ...f, ageYears: Number(v) || 0, birthDate: undefined }))} />
+            <Text style={styles.ageUnit}>살</Text>
+          </View>
+        )}
+
+        <View style={[styles.rowFields, { marginTop: 14 }]}>
+          <View style={{ flex: 1 }}>
             <Text style={styles.fieldLabel}>체중 (kg)</Text>
             <TextInput style={styles.input} placeholder="3.0" placeholderTextColor="#bbb"
               keyboardType="decimal-pad" value={String(form.weightKg)}
@@ -475,6 +581,35 @@ const styles = StyleSheet.create({
   },
   rowFields: { flexDirection: 'row', gap: 10, marginTop: 14 },
   halfField: { flex: 1 },
+
+  birthToggleRow: { flexDirection: 'row', backgroundColor: '#F0F0F0', borderRadius: 10, padding: 3, marginBottom: 12 },
+  birthToggleBtn: { flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center' },
+  birthToggleBtnActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  birthToggleText: { fontSize: 13, color: '#aaa', fontWeight: '500' },
+  birthToggleTextActive: { color: '#1a1a1a', fontWeight: '700' },
+
+  birthDropRow: { flexDirection: 'row', gap: 8 },
+  birthDropWrap: { flex: 1, position: 'relative' },
+  birthDropBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#F7F7F7', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 12,
+    borderWidth: 0.5, borderColor: '#E5E5E5',
+  },
+  birthDropText: { fontSize: 14, color: '#1a1a1a', flex: 1 },
+  birthDropList: {
+    position: 'absolute', top: 44, left: 0, right: 0, zIndex: 100,
+    backgroundColor: '#fff', borderRadius: 10, borderWidth: 0.5, borderColor: '#E5E5E5',
+    maxHeight: 180, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+  },
+  birthDropItem: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F0F0F0' },
+  birthDropItemSel: { backgroundColor: '#FFF0EC' },
+  birthDropItemText: { fontSize: 13, color: '#1a1a1a' },
+  birthDropItemTextSel: { color: '#E9785A', fontWeight: '700' },
+  birthCalcText: { fontSize: 12, color: '#1D9E75', fontWeight: '600', marginTop: 8, textAlign: 'right' },
+
+  ageDirectRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ageUnit: { fontSize: 15, color: '#666', fontWeight: '500' },
+
   optionRow: { flexDirection: 'row', gap: 8 },
   optionBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 0.5, borderColor: '#E5E5E5', alignItems: 'center' },
   optionBtnText: { fontSize: 14, color: '#666' },

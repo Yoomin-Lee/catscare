@@ -5,6 +5,7 @@ export type Cat = {
   name: string
   breed: string
   ageYears: number
+  birthDate?: string   // 'YYYY.MM.DD'
   weightKg: number
   gender: 'male' | 'female'
   neutered: boolean
