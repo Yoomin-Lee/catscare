@@ -67,6 +67,7 @@ export default function HomeScreen() {
   const [birthY, setBirthY] = useState('')
   const [birthM, setBirthM] = useState('')
   const [birthD, setBirthD] = useState('')
+  const [weightText, setWeightText] = useState('3')
 
   const setBirthPart = (part: 'y' | 'm' | 'd', val: string) => {
     const next = { y: birthY, m: birthM, d: birthD, [part]: val }
@@ -79,14 +80,17 @@ export default function HomeScreen() {
   }
 
   const openAdd = () => {
-    setForm(emptyForm()); setEditId(null); setBreedOption(''); setShowBreedList(false)
-    setBirthY(''); setBirthM(''); setBirthD(''); setOpenDrop(null); setSheetMode('add')
+    const ef = emptyForm()
+    setForm(ef); setEditId(null); setBreedOption(''); setShowBreedList(false)
+    setBirthY(''); setBirthM(''); setBirthD(''); setOpenDrop(null)
+    setWeightText(String(ef.weightKg)); setSheetMode('add')
   }
   const openEdit = (cat: Cat) => {
     setForm({ name: cat.name, breed: cat.breed, ageYears: cat.ageYears, birthDate: cat.birthDate, weightKg: cat.weightKg, gender: cat.gender, neutered: cat.neutered, photoUri: cat.photoUri })
     setBreedOption(BREEDS.includes(cat.breed) ? cat.breed : (cat.breed ? '기타' : ''))
     const p = parseBirth(cat.birthDate)
     setBirthY(p.y); setBirthM(p.m); setBirthD(p.d)
+    setWeightText(String(cat.weightKg))
     setShowBreedList(false); setOpenDrop(null); setEditId(cat.id); setSheetMode('edit')
   }
   const selectBreed = (breed: string) => {
@@ -383,9 +387,15 @@ export default function HomeScreen() {
         <View style={[styles.rowFields, { marginTop: 14 }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.fieldLabel}>체중 (kg)</Text>
-            <TextInput style={styles.input} placeholder="3.0" placeholderTextColor="#bbb"
-              keyboardType="decimal-pad" value={String(form.weightKg)}
-              onChangeText={v => setForm(f => ({ ...f, weightKg: Number(v) || 0 }))} />
+            <TextInput style={styles.input} placeholder="3.00" placeholderTextColor="#bbb"
+              keyboardType="decimal-pad" value={weightText}
+              onChangeText={v => {
+                if (/^\d*\.?\d{0,2}$/.test(v)) {
+                  setWeightText(v)
+                  const n = parseFloat(v)
+                  if (!isNaN(n)) setForm(f => ({ ...f, weightKg: n }))
+                }
+              }} />
           </View>
         </View>
 
