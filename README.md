@@ -85,5 +85,11 @@ npx expo export --platform web   # dist/ 폴더에 정적 파일 생성
 - 병원 기록, 체중/투약, 식단/기호성 탭 추가
 
 ### 2026-06-09
-- 고양이 파비콘 적용
-- 개발노트 작성 및 GitHub 배포
+- 고양이 파비콘 적용 (ChatGPT 생성 이미지)
+- 개발노트 작성 및 GitHub 배포 (gh-pages 브랜치)
+- Jekyll 무시 파일(`.nojekyll`) 추가 → `_expo/` 정적 리소스 정상 서빙
+- Supabase 인증: `detectSessionInUrl` 웹에서 `true`로 수정 → 이메일 인증 후 세션 감지
+- `AsyncStorage` → 웹에서 브라우저 `localStorage` 사용으로 전환
+- 데스크톱에서 모바일 레이아웃 유지: `_layout.tsx`에 `max-width: 430px` View 래퍼 적용
+- 파비콘 교체: 나뷔츄야옹 실사 사진으로 변경
+- 헤더 고양이 아이콘 시각적 중심 보정: 크기 16→24px, `translateY: 2px` 아래로 이동
