@@ -28,12 +28,7 @@ const HOSPITAL_CYCLES = [
   { label: '6개월', months: 6 },
   { label: '1년', months: 12 },
 ]
-const SAND_CYCLES = [
-  { label: '1주', weeks: 1 },
-  { label: '2주', weeks: 2 },
-  { label: '4주', weeks: 4 },
-  { label: '8주', weeks: 8 },
-]
+const SAND_CYCLES = Array.from({ length: 10 }, (_, i) => ({ weeks: i + 1 }))
 
 const WEEK_LABELS = ['일', '월', '화', '수', '목', '금', '토']
 
@@ -263,13 +258,20 @@ export default function AlarmScreen() {
           />
         )}
         <Text style={[styles.fieldLabel, { marginTop: 16 }]}>교체 주기</Text>
-        <View style={styles.cycleRow}>
-          {SAND_CYCLES.map(c => (
-            <TouchableOpacity key={c.label}
-              style={[styles.cycleBtn, sandCycle === c.weeks && styles.cycleBtnActive]}
-              onPress={() => setSandCycle(c.weeks)}>
-              <Text style={[styles.cycleBtnText, sandCycle === c.weeks && styles.cycleBtnTextActive]}>{c.label}</Text>
-            </TouchableOpacity>
+        <View style={{ gap: 8 }}>
+          {[SAND_CYCLES.slice(0, 5), SAND_CYCLES.slice(5)].map((row, ri) => (
+            <View key={ri} style={{ flexDirection: 'row', gap: 8 }}>
+              {row.map(c => (
+                <TouchableOpacity
+                  key={c.weeks}
+                  style={[styles.sandTab, sandCycle === c.weeks && styles.sandTabActive]}
+                  onPress={() => setSandCycle(c.weeks)}
+                >
+                  <Text style={[styles.sandTabNum, sandCycle === c.weeks && styles.sandTabNumActive]}>{c.weeks}</Text>
+                  <Text style={[styles.sandTabUnit, sandCycle === c.weeks && styles.sandTabUnitActive]}>주</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           ))}
         </View>
         <View style={styles.nextDateBox}>
@@ -346,6 +348,16 @@ const styles = StyleSheet.create({
   cycleBtnActive: { backgroundColor: '#E9785A', borderColor: '#E9785A' },
   cycleBtnText: { fontSize: 13, color: '#666', fontWeight: '500' },
   cycleBtnTextActive: { color: '#fff', fontWeight: '700' },
+  sandTab: {
+    flex: 1, paddingVertical: 10, borderRadius: 10,
+    borderWidth: 0.5, borderColor: '#E5E5E5',
+    alignItems: 'center', justifyContent: 'center', gap: 1,
+  },
+  sandTabActive: { backgroundColor: '#BA7517', borderColor: '#BA7517' },
+  sandTabNum: { fontSize: 16, fontWeight: '700', color: '#555' },
+  sandTabNumActive: { color: '#fff' },
+  sandTabUnit: { fontSize: 10, color: '#aaa', fontWeight: '500' },
+  sandTabUnitActive: { color: 'rgba(255,255,255,0.8)' },
   nextDateBox: { marginTop: 16, backgroundColor: '#FFF8F5', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 8 },
   nextDateLabel: { fontSize: 13, color: '#888' },
   nextDateValue: { fontSize: 14, fontWeight: '600', color: '#1a1a1a', flex: 1 },
