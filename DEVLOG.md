@@ -215,12 +215,42 @@ logoIcon: {
 - "알림 추가" 버튼으로 항목 추가, ✕ 버튼으로 삭제
 - 알람 설정 카드 sub 텍스트가 선택된 알림 목록을 실시간 반영
 
+### 18. Google 소셜 로그인 UI
+**파일:** `src/components/login-screen.tsx`
+
+- 이메일/비밀번호 폼 아래 "또는" 구분선 + **Google로 계속하기** 버튼 추가
+- `supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } })` 호출
+- `detectSessionInUrl: true` (기존 설정) 로 리다이렉트 후 자동 세션 인식
+- **활성화 사전 조건:** Google Cloud Console에서 OAuth 2.0 클라이언트 생성 → Supabase Dashboard Auth > Providers > Google에 Client ID/Secret 입력 필요
+
+### 19. 병원 방문 알림 시기 드롭다운 + 시간 설정
+**파일:** `src/app/index.tsx`
+
+- `hospitalNotify: NotifyEntry[]` 상태 추가 (기본: 7일 전 09:00 · 1일 전 09:00)
+- 화장실 알림과 동일한 며칠 전 드롭다운 + 시간 드롭다운 UI 적용
+- 알람 설정 카드 sub 텍스트 동적 반영
+
+### 20. 투약 복용 시간 드롭다운
+**파일:** `src/components/medication-section.tsx`
+
+- `DateTimePicker` 제거 → `TIME_OPTIONS`(30분 단위, 06:00~22:30) 기반 인라인 드롭다운으로 교체
+- `times: Date[]` → `times: string[]` (HH:MM) 구조로 변경
+- 각 회차별 시간 버튼 탭 → 선택 목록 인라인 전개, 선택 시 자동 닫힘
+- 웹/모바일 모두 동작, 스크롤 가능한 드롭다운 목록 (maxHeight 200)
+
+### 21. 쿠팡 모래 바로가기 링크 연결
+**파일:** `src/app/index.tsx`
+
+- 벤토나이트 모래 링크를 네이버 검색에서 쿠팡 직링크로 변경
+- `Linking.openURL` 연결 + 외부 링크 아이콘 추가
+
 ---
 
 ## 남은 작업 (TODO)
 
 - [ ] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장 (`exam_records` 테이블 생성 필요)
-- [ ] 소셜 로그인 (애플 / 네이버 / 카카오) 연동
+- [ ] Google 로그인 활성화 (Google Cloud Console OAuth 클라이언트 생성 + Supabase Provider 설정)
+- [ ] 카카오 / 네이버 소셜 로그인 연동
 - [ ] 소변 검사 기록 UI 구현
 - [ ] 체중 기록 DB 저장 + 그래프 실 데이터
 - [ ] 푸시 알림 실제 발송 연동 (Expo Notifications)

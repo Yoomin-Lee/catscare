@@ -42,6 +42,20 @@ export default function LoginScreen({ onGuest }: { onGuest?: () => void }) {
     setSignUpDone(false)
   }
 
+  const handleGoogleSignIn = async () => {
+    setError('')
+    setLoading(true)
+    const redirectTo = Platform.OS === 'web'
+      ? window.location.href.split('#')[0]
+      : undefined
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    })
+    setLoading(false)
+    if (error) setError(error.message)
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -110,6 +124,24 @@ export default function LoginScreen({ onGuest }: { onGuest?: () => void }) {
                 {isSignUp ? '이미 계정이 있어요 · 로그인' : '처음이신가요? · 회원가입'}
               </Text>
             </TouchableOpacity>
+
+            {!isSignUp && (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>또는</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+                <TouchableOpacity
+                  style={[styles.socialBtn, loading && styles.buttonDisabled]}
+                  onPress={handleGoogleSignIn}
+                  disabled={loading}
+                >
+                  <Text style={styles.socialBtnIcon}>G</Text>
+                  <Text style={styles.socialBtnText}>Google로 계속하기</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
             {onGuest && !isSignUp && (
               <TouchableOpacity style={styles.guestBtn} onPress={onGuest}>
@@ -230,6 +262,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+  dividerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 16,
+  },
+  dividerLine: { flex: 1, height: 0.5, backgroundColor: '#E5E5E5' },
+  dividerText: { fontSize: 12, color: '#bbb' },
+  socialBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    borderWidth: 1, borderColor: '#E5E5E5', borderRadius: 12,
+    paddingVertical: 13, backgroundColor: '#fff',
+  },
+  socialBtnIcon: {
+    fontSize: 16, fontWeight: '700',
+    color: '#EA4335',
+  },
+  socialBtnText: { fontSize: 15, color: '#333', fontWeight: '500' },
   guestBtn: {
     alignItems: 'center',
     marginTop: 20,

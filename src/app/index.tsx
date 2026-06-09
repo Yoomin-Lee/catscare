@@ -1,4 +1,4 @@
-import { Image, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
+import { Image, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
 import { useState } from 'react'
@@ -168,6 +168,10 @@ export default function AlarmScreen() {
     { id: '1', days: 3, time: '09:00' },
     { id: '2', days: 0, time: '09:00' },
   ])
+  const [hospitalNotify, setHospitalNotify] = useState<NotifyEntry[]>([
+    { id: 'h1', days: 7, time: '09:00' },
+    { id: 'h2', days: 1, time: '09:00' },
+  ])
   const [openDrop, setOpenDrop] = useState<string | null>(null)
 
   const notifyLabel = (entries: NotifyEntry[]) => {
@@ -255,7 +259,7 @@ export default function AlarmScreen() {
         <Text style={[styles.sectionTitle, { marginTop: 8 }]}>알람 설정</Text>
         <View style={styles.settingsCard}>
           {[
-            { key: 'hospital' as const, label: '병원 방문 알림', sub: '방문 7일 전, 1일 전' },
+            { key: 'hospital' as const, label: '병원 방문 알림', sub: `방문 ${notifyLabel(hospitalNotify)}` },
             { key: 'sand' as const, label: '화장실 모래 교체 알림', sub: `교체 ${notifyLabel(sandNotify)}` },
           ].map((item, i, arr) => (
             <View key={item.key} style={[styles.toggleRow, i < arr.length - 1 && styles.toggleBorder]}>
@@ -303,12 +307,81 @@ export default function AlarmScreen() {
         </View>
         <View style={[styles.toggleRow, { marginTop: 8 }]}>
           <View style={styles.toggleInfo}>
-            <Text style={styles.toggleLabel}>알림</Text>
-            <Text style={styles.toggleSub}>7일 전 + 1일 전</Text>
+            <Text style={styles.toggleLabel}>방문 알림</Text>
+            {alarms.hospital
+              ? <Text style={styles.toggleSub}>{notifyLabel(hospitalNotify)}</Text>
+              : <Text style={styles.toggleSub}>꺼짐</Text>
+            }
           </View>
           <Switch value={alarms.hospital} onValueChange={() => toggle('hospital')}
             trackColor={{ false: '#ddd', true: '#1D9E75' }} thumbColor="#fff" />
         </View>
+        {alarms.hospital && (
+          <View style={styles.notifySection}>
+            <Text style={styles.notifySectionLabel}>알림 시기</Text>
+            {hospitalNotify.map(entry => {
+              const dayOpen  = openDrop === `${entry.id}-day`
+              const timeOpen = openDrop === `${entry.id}-time`
+              const dayLabel  = DAY_OPTIONS.find(o => o.value === entry.days)?.label ?? ''
+              const timeLabel = TIME_OPTIONS.find(o => o.value === entry.time)?.label ?? ''
+              return (
+                <View key={entry.id} style={styles.notifyRow}>
+                  <View style={styles.notifySelRow}>
+                    <TouchableOpacity
+                      style={[styles.notifySel, styles.notifySelDay, dayOpen && styles.notifySelOpen]}
+                      onPress={() => setOpenDrop(dayOpen ? null : `${entry.id}-day`)}
+                    >
+                      <Text style={styles.notifySelText}>{dayLabel}</Text>
+                      <Feather name={dayOpen ? 'chevron-up' : 'chevron-down'} size={12} color="#888" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.notifySel, styles.notifySelTime, timeOpen && styles.notifySelOpen]}
+                      onPress={() => setOpenDrop(timeOpen ? null : `${entry.id}-time`)}
+                    >
+                      <Text style={styles.notifySelText}>{timeLabel}</Text>
+                      <Feather name={timeOpen ? 'chevron-up' : 'chevron-down'} size={12} color="#888" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.notifyRemove}
+                      onPress={() => { setHospitalNotify(p => p.filter(e => e.id !== entry.id)); setOpenDrop(null) }}
+                    >
+                      <Feather name="x" size={15} color="#bbb" />
+                    </TouchableOpacity>
+                  </View>
+                  {dayOpen && (
+                    <View style={styles.dropList}>
+                      {DAY_OPTIONS.map(o => (
+                        <TouchableOpacity key={o.value} style={styles.dropItem}
+                          onPress={() => { setHospitalNotify(p => p.map(e => e.id === entry.id ? { ...e, days: o.value } : e)); setOpenDrop(null) }}>
+                          <Feather name="check" size={13} color={entry.days === o.value ? '#1D9E75' : 'transparent'} />
+                          <Text style={[styles.dropItemText, entry.days === o.value && styles.dropItemActive]}>{o.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  {timeOpen && (
+                    <View style={styles.dropList}>
+                      {TIME_OPTIONS.map(o => (
+                        <TouchableOpacity key={o.value} style={styles.dropItem}
+                          onPress={() => { setHospitalNotify(p => p.map(e => e.id === entry.id ? { ...e, time: o.value } : e)); setOpenDrop(null) }}>
+                          <Feather name="check" size={13} color={entry.time === o.value ? '#1D9E75' : 'transparent'} />
+                          <Text style={[styles.dropItemText, entry.time === o.value && styles.dropItemActive]}>{o.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )
+            })}
+            {hospitalNotify.length < 5 && (
+              <TouchableOpacity style={styles.addNotifyBtn}
+                onPress={() => setHospitalNotify(p => [...p, { id: Date.now().toString(), days: 1, time: '09:00' }])}>
+                <Feather name="plus" size={13} color="#1D9E75" />
+                <Text style={styles.addNotifyText}>알림 추가</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </BottomSheet>
 
       <BottomSheet visible={panel === 'sand'} onClose={() => setPanel(null)} title="화장실 모래 교체 설정">
@@ -433,11 +506,12 @@ export default function AlarmScreen() {
         <Text style={[styles.fieldLabel, { marginTop: 16 }]}>즐겨 쓰는 모래 바로가기</Text>
         {[
           { label: '두부 모래 구매 (쿠팡)', url: 'https://www.coupang.com/np/search?q=두부모래' },
-          { label: '벤토나이트 모래 (네이버)', url: 'https://search.shopping.naver.com/search/all?query=벤토나이트+모래' },
+          { label: '벤토나이트 모래 (쿠팡)', url: 'https://www.coupang.com/vp/products/1349710539?itemId=28075863531&vendorItemId=95032406165&q=%EC%98%A4%EB%8D%94%EC%BA%85+%EB%AC%B4%ED%96%A5&searchId=63508eff1405195&sourceType=search&itemsCount=60&searchRank=2&rank=2&traceId=mq6o2tm0' },
         ].map(item => (
-          <TouchableOpacity key={item.label} style={styles.linkBtnFull}>
+          <TouchableOpacity key={item.label} style={styles.linkBtnFull} onPress={() => Linking.openURL(item.url)}>
             <Feather name="shopping-cart" size={14} color="#1D9E75" />
             <Text style={styles.linkBtnFullText}>{item.label}</Text>
+            <Feather name="external-link" size={12} color="#1D9E75" />
           </TouchableOpacity>
         ))}
         <Text style={[styles.fieldLabel, { marginTop: 20 }]}>교체 기록</Text>
