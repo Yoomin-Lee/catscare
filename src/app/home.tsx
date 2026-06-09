@@ -401,7 +401,7 @@ export default function HomeScreen() {
         <View style={[styles.rowFields, { marginTop: 14 }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.fieldLabel}>체중 (kg)</Text>
-            <TextInput style={styles.input} placeholder="3.00" placeholderTextColor="#bbb"
+            <TextInput style={styles.input} placeholder="0.00kg" placeholderTextColor="#bbb"
               keyboardType="decimal-pad" value={weightText}
               onChangeText={v => {
                 if (/^\d*\.?\d{0,2}$/.test(v)) {
