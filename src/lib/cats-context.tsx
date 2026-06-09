@@ -13,7 +13,16 @@ export type Cat = {
 }
 
 const BREED_PALETTE: { keyword: string; color: string }[] = [
+  // 코리안숏헤어 세부 유형 (반드시 '코리안' 앞에 위치)
+  { keyword: '고등어', color: '#78909C' },   // 회청색 (고등어 줄무늬)
+  { keyword: '턱시도', color: '#455A64' },   // 진회색 (검정+흰색)
+  { keyword: '치즈', color: '#F4900C' },     // 주황 (치즈색)
+  { keyword: '삼색', color: '#C2185B' },     // 핑크 (삼색 패치)
+  { keyword: '흰색', color: '#5B8ECC' },    // 하늘색 (흰색 대비)
+  { keyword: '검정', color: '#546E7A' },    // 어두운 청회색
+  // 일반 코리안숏헤어
   { keyword: '코리안', color: '#E9785A' },
+  // 외국 품종
   { keyword: '페르시안', color: '#9E9E9E' },
   { keyword: '러시안', color: '#607D8B' },
   { keyword: '샴', color: '#8D6E63' },

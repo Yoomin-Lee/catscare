@@ -28,7 +28,10 @@ function parseBirth(birthDate?: string) {
 const GENDER_COLORS = { female: '#E9785A', male: '#534AB7' }
 
 const BREEDS = [
-  '코리안숏헤어', '페르시안', '러시안블루', '샴', '노르웨이숲고양이',
+  '코리안숏헤어 (고등어)', '코리안숏헤어 (턱시도)', '코리안숏헤어 (치즈)',
+  '코리안숏헤어 (삼색)', '코리안숏헤어 (흰색)', '코리안숏헤어 (검정)',
+  '__divider__',
+  '페르시안', '러시안블루', '샴', '노르웨이숲고양이',
   '메인쿤', '스코티시폴드', '버만', '뱅갈', '터키시앙고라',
   '아비시니안', '브리티시숏헤어', '렉돌', '먼치킨', '히말라얀', '기타',
 ]
@@ -94,6 +97,7 @@ export default function HomeScreen() {
     setShowBreedList(false); setOpenDrop(null); setEditId(cat.id); setSheetMode('edit')
   }
   const selectBreed = (breed: string) => {
+    if (breed === '__divider__') return
     setBreedOption(breed)
     if (breed !== '기타') setForm(f => ({ ...f, breed }))
     else setForm(f => ({ ...f, breed: '' }))
@@ -291,9 +295,14 @@ export default function HomeScreen() {
             {form.photoUri ? (
               <Image source={{ uri: form.photoUri }} style={styles.photoPreview} />
             ) : (
-              <View style={styles.photoPlaceholder}>
-                <FontAwesome5 name="cat" size={28} color="#ddd" />
-              </View>
+              (() => {
+                const avatarColor = catAvatarColor({ name: form.name, breed: form.breed })
+                return (
+                  <View style={[styles.photoPlaceholder, { backgroundColor: avatarColor + '28' }]}>
+                    <FontAwesome5 name="cat" size={28} color={avatarColor} />
+                  </View>
+                )
+              })()
             )}
             <View style={styles.photoEditBadge}>
               <Feather name="camera" size={12} color="#fff" />
@@ -318,12 +327,17 @@ export default function HomeScreen() {
         </TouchableOpacity>
         {showBreedList && (
           <View style={styles.breedDropdown}>
-            {BREEDS.map(b => (
-              <TouchableOpacity key={b} style={[styles.breedItem, breedOption === b && styles.breedItemSelected]} onPress={() => selectBreed(b)}>
-                <Text style={[styles.breedItemText, b === '기타' && styles.breedItemOther, breedOption === b && styles.breedItemTextSelected]}>{b}</Text>
-                {breedOption === b && <Feather name="check" size={15} color="#E9785A" />}
-              </TouchableOpacity>
-            ))}
+            {BREEDS.map((b, i) =>
+              b === '__divider__' ? (
+                <View key="divider" style={styles.breedDivider} />
+              ) : (
+                <TouchableOpacity key={b} style={[styles.breedItem, breedOption === b && styles.breedItemSelected]} onPress={() => selectBreed(b)}>
+                  <View style={[styles.breedDot, { backgroundColor: catAvatarColor({ name: '', breed: b }) }]} />
+                  <Text style={[styles.breedItemText, b === '기타' && styles.breedItemOther, breedOption === b && styles.breedItemTextSelected]}>{b}</Text>
+                  {breedOption === b && <Feather name="check" size={15} color="#E9785A" />}
+                </TouchableOpacity>
+              )
+            )}
           </View>
         )}
         {breedOption === '기타' && (
@@ -550,11 +564,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F7F7', borderWidth: 0.5, borderTopWidth: 0, borderColor: '#E5E5E5',
     borderBottomLeftRadius: 10, borderBottomRightRadius: 10, overflow: 'hidden',
   },
-  breedItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 0.5, borderTopColor: '#EBEBEB' },
+  breedItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 0.5, borderTopColor: '#EBEBEB' },
   breedItemSelected: { backgroundColor: '#FFF0EC' },
-  breedItemText: { fontSize: 14, color: '#1a1a1a' },
+  breedItemText: { fontSize: 14, color: '#1a1a1a', flex: 1 },
   breedItemOther: { color: '#888' },
   breedItemTextSelected: { color: '#E9785A', fontWeight: '600' },
+  breedDot: { width: 10, height: 10, borderRadius: 5 },
+  breedDivider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 4, marginHorizontal: 14 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#999', marginBottom: 8 },
   input: {
     backgroundColor: '#F7F7F7', borderRadius: 10,

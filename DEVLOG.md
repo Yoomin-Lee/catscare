@@ -138,6 +138,35 @@ logoIcon: {
 
 ---
 
+### 8. 소수점 체중 입력 수정
+**파일:** `src/app/home.tsx`
+
+- `value={String(form.weightKg)}` 방식에서 `weightText` 독립 state 분리
+- "4." 입력 시 소수점이 사라지는 버그 수정
+- 소수점 둘째 자리까지 허용, 그 이상 차단 (`/^\d*\.?\d{0,2}$/`)
+
+### 9. 코리안숏헤어 품종 세분화 및 아바타 색상 자동 생성
+**파일:** `src/lib/cats-context.tsx`, `src/app/home.tsx`
+
+- 코리안숏헤어 → 고등어·턱시도·치즈·삼색·흰색·검정 6종 분화
+- 각 유형별 색상 팔레트 추가 (고등어 #78909C, 턱시도 #455A64, 치즈 #F4900C 등)
+- 품종 드롭다운에 색상 미리보기 도트(●) 표시
+- 사진 미등록 시 선택된 품종 색상으로 아바타 미리보기 실시간 표시
+
+### 10. 로그인 없이 둘러보기
+**파일:** `src/app/_layout.tsx`, `src/components/login-screen.tsx`
+
+- 로그인 화면 하단에 "로그인 없이 둘러보기" 버튼 추가
+- `guestMode` state로 인증 우회, 로그인 성공 시 자동 해제
+
+### 11. 웹에서 BottomSheet 430px 제한
+**파일:** `src/components/bottom-sheet.tsx`
+
+- 데스크톱에서 프로필 편집 시트가 전체 화면 너비로 펼쳐지는 문제 수정
+- `maxWidth: 430, alignSelf: 'center'` 적용 → 모바일 레이아웃 유지
+
+---
+
 ## 남은 작업 (TODO)
 
 - [ ] Supabase DB 연동 → 고양이 데이터 실제 저장 (현재 로컬 상태만)
