@@ -2,10 +2,11 @@ import { Image, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacit
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
 import * as ImagePicker from 'expo-image-picker'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import { useCats, catAvatarColor, type Cat } from '@/lib/cats-context'
+import { supabase } from '@/lib/supabase'
 
 const NOW = new Date()
 const YEARS = Array.from({ length: 30 }, (_, i) => String(NOW.getFullYear() - i))
@@ -58,10 +59,35 @@ function CatAvatarDisplay({ cat, size }: { cat: Cat; size: number }) {
   )
 }
 
+type AccountInfo = {
+  email: string
+  provider: 'google' | 'email' | 'kakao' | 'unknown'
+}
+
+const PROVIDER_LABEL: Record<AccountInfo['provider'], string> = {
+  google: 'Google',
+  email: '이메일',
+  kakao: '카카오',
+  unknown: '알 수 없음',
+}
+const PROVIDER_COLOR: Record<AccountInfo['provider'], string> = {
+  google: '#EA4335',
+  email: '#534AB7',
+  kakao: '#FEE500',
+  unknown: '#aaa',
+}
+const PROVIDER_ICON: Record<AccountInfo['provider'], string> = {
+  google: 'globe',
+  email: 'mail',
+  kakao: 'message-circle',
+  unknown: 'user',
+}
+
 export default function HomeScreen() {
   const { cats, selectedId, selectedCat, selectCat, addCat, updateCat, removeCat } = useCats()
 
-  const [sheetMode, setSheetMode] = useState<'add' | 'edit' | null>(null)
+  const [sheetMode, setSheetMode] = useState<'add' | 'edit' | 'settings' | null>(null)
+  const [account, setAccount] = useState<AccountInfo | null>(null)
   const [form, setForm] = useState<Omit<Cat, 'id'>>(emptyForm())
   const [editId, setEditId] = useState<string | null>(null)
   const [showBreedList, setShowBreedList] = useState(false)
@@ -125,12 +151,29 @@ export default function HomeScreen() {
     setSheetMode(null)
   }
 
+  const openSettings = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setAccount(null); setSheetMode('settings'); return }
+    const identity = user.identities?.[0]
+    const provider = (identity?.provider ?? 'unknown') as AccountInfo['provider']
+    setAccount({ email: user.email ?? '', provider })
+    setSheetMode('settings')
+  }
+
+  const logout = async () => {
+    await supabase.auth.signOut()
+    setSheetMode(null)
+  }
+
   const accentColor = GENDER_COLORS[selectedCat.gender]
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.pageHeader}>
         <Text style={styles.pageTitle}>CatsCare</Text>
+        <TouchableOpacity onPress={openSettings} style={styles.settingsBtn}>
+          <Feather name="settings" size={20} color="#bbb" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -283,9 +326,42 @@ export default function HomeScreen() {
 
       </ScrollView>
 
+      {/* ── 계정 설정 바텀시트 ── */}
+      <BottomSheet visible={sheetMode === 'settings'} onClose={() => setSheetMode(null)} title="계정 설정">
+        {account ? (
+          <>
+            <View style={styles.accountCard}>
+              <View style={[styles.accountIconWrap, { backgroundColor: PROVIDER_COLOR[account.provider] + '18' }]}>
+                <Feather name={PROVIDER_ICON[account.provider] as any} size={22} color={PROVIDER_COLOR[account.provider]} />
+              </View>
+              <View style={styles.accountInfo}>
+                <View style={styles.accountBadgeRow}>
+                  <View style={[styles.providerBadge, { backgroundColor: PROVIDER_COLOR[account.provider] + '18' }]}>
+                    <Text style={[styles.providerBadgeText, { color: PROVIDER_COLOR[account.provider] }]}>
+                      {PROVIDER_LABEL[account.provider]}
+                    </Text>
+                  </View>
+                  <Text style={styles.accountConnectedText}>로 연결됨</Text>
+                </View>
+                <Text style={styles.accountEmail}>{account.email}</Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+              <Feather name="log-out" size={16} color="#E9785A" />
+              <Text style={styles.logoutBtnText}>로그아웃</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <View style={styles.guestAccountCard}>
+            <Feather name="user" size={28} color="#bbb" />
+            <Text style={styles.guestAccountText}>게스트 모드로 사용 중이에요{'\n'}로그인하면 데이터가 저장돼요</Text>
+          </View>
+        )}
+      </BottomSheet>
+
       {/* ── 추가/수정 바텀시트 ── */}
       <BottomSheet
-        visible={sheetMode !== null}
+        visible={sheetMode === 'add' || sheetMode === 'edit'}
         onClose={() => setSheetMode(null)}
         title={sheetMode === 'edit' ? '프로필 수정' : '새 고양이 추가'}>
 
@@ -449,10 +525,30 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FFF8F5' },
   pageHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 14,
     borderBottomWidth: 0.5, borderBottomColor: '#EEE', backgroundColor: '#fff',
   },
   pageTitle: { fontSize: 17, fontWeight: '700', color: '#1a1a1a' },
+  settingsBtn: { padding: 4 },
+  accountCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: '#F7F7F7', borderRadius: 14, padding: 16, marginBottom: 16,
+  },
+  accountIconWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  accountInfo: { flex: 1 },
+  accountBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  providerBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  providerBadgeText: { fontSize: 11, fontWeight: '700' },
+  accountConnectedText: { fontSize: 12, color: '#999' },
+  accountEmail: { fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
+  logoutBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1, borderColor: '#FDDDD5', borderRadius: 12, padding: 14,
+  },
+  logoutBtnText: { color: '#E9785A', fontWeight: '600', fontSize: 14 },
+  guestAccountCard: { alignItems: 'center', gap: 12, paddingVertical: 24 },
+  guestAccountText: { fontSize: 14, color: '#aaa', textAlign: 'center', lineHeight: 22 },
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
   sectionTitle: { fontSize: 11, fontWeight: '600', color: '#aaa', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10, marginTop: 8 },
