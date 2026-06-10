@@ -1,8 +1,10 @@
 import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import BottomSheet from './bottom-sheet'
+import { supabase } from '@/lib/supabase'
+import { useCats } from '@/lib/cats-context'
 
 // ─── Types ───────────────────────────────────────────────
 type FreqType = 'daily' | 'every_other' | 'weekly' | 'monthly'
@@ -69,14 +71,33 @@ const EMPTY_FORM = (): Omit<Medication, 'id'> => ({
 
 // ─── Component ───────────────────────────────────────────
 export default function MedicationSection() {
-  const [meds, setMeds] = useState<Medication[]>([
-    { id: '1', name: '구충제 (내부)', dosage: '1정', frequency: 'monthly', dosesPerDay: 1, times: ['09:00'], alarmOn: true },
-  ])
+  const { selectedCat, userId } = useCats()
+  const [meds, setMeds] = useState<Medication[]>([])
   const [panelOpen, setPanelOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM())
   const [openTimeDrop, setOpenTimeDrop] = useState<number | null>(null)
   const [openDosageDrop, setOpenDosageDrop] = useState(false)
+
+  useEffect(() => {
+    if (!userId || selectedCat.id === '__guest__') { setMeds([]); return }
+    supabase
+      .from('medications')
+      .select('*')
+      .eq('cat_id', selectedCat.id)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        setMeds((data ?? []).map(r => ({
+          id: r.id as string,
+          name: r.name as string,
+          dosage: r.dosage as string,
+          frequency: r.frequency as FreqType,
+          dosesPerDay: r.doses_per_day as DosesPerDay,
+          times: r.times as string[],
+          alarmOn: r.alarm_on as boolean,
+        })))
+      })
+  }, [selectedCat.id, userId])
 
   const openAdd = () => {
     setEditTarget(null); setForm(EMPTY_FORM()); setOpenTimeDrop(null); setPanelOpen(true)
@@ -87,21 +108,51 @@ export default function MedicationSection() {
     setOpenTimeDrop(null); setPanelOpen(true)
   }
 
-  const save = () => {
+  const save = async () => {
     if (!form.name.trim()) return
     if (editTarget) {
       setMeds(ms => ms.map(m => m.id === editTarget ? { ...form, id: editTarget } : m))
+      if (userId && selectedCat.id !== '__guest__') {
+        await supabase.from('medications').update({
+          name: form.name, dosage: form.dosage, frequency: form.frequency,
+          doses_per_day: form.dosesPerDay, times: form.times, alarm_on: form.alarmOn,
+        }).eq('id', editTarget).eq('user_id', userId)
+      }
     } else {
-      setMeds(ms => [...ms, { ...form, id: Date.now().toString() }])
+      if (!userId || selectedCat.id === '__guest__') {
+        setMeds(ms => [...ms, { ...form, id: Date.now().toString() }])
+      } else {
+        const { data } = await supabase
+          .from('medications')
+          .insert({
+            cat_id: selectedCat.id, user_id: userId,
+            name: form.name, dosage: form.dosage, frequency: form.frequency,
+            doses_per_day: form.dosesPerDay, times: form.times, alarm_on: form.alarmOn,
+          })
+          .select()
+          .single()
+        if (data) setMeds(ms => [...ms, { ...form, id: data.id as string }])
+      }
     }
     setPanelOpen(false)
   }
-  const remove = () => {
-    if (editTarget) setMeds(ms => ms.filter(m => m.id !== editTarget))
+  const remove = async () => {
+    if (!editTarget) return
+    setMeds(ms => ms.filter(m => m.id !== editTarget))
+    if (userId && selectedCat.id !== '__guest__') {
+      await supabase.from('medications').delete().eq('id', editTarget).eq('user_id', userId)
+    }
     setPanelOpen(false)
   }
-  const toggleAlarm = (id: string) =>
-    setMeds(ms => ms.map(m => m.id === id ? { ...m, alarmOn: !m.alarmOn } : m))
+  const toggleAlarm = async (id: string) => {
+    const med = meds.find(m => m.id === id)
+    if (!med) return
+    const newVal = !med.alarmOn
+    setMeds(ms => ms.map(m => m.id === id ? { ...m, alarmOn: newVal } : m))
+    if (userId && selectedCat.id !== '__guest__') {
+      await supabase.from('medications').update({ alarm_on: newVal }).eq('id', id).eq('user_id', userId)
+    }
+  }
 
   const handleDosesChange = (doses: DosesPerDay) => {
     const newTimes = DEFAULT_TIMES[doses].map((def, i) => form.times[i] ?? def)

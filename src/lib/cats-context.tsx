@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { supabase } from './supabase'
 
 export type Cat = {
   id: string
@@ -13,16 +14,13 @@ export type Cat = {
 }
 
 const BREED_PALETTE: { keyword: string; color: string }[] = [
-  // 코리안숏헤어 세부 유형 (반드시 '코리안' 앞에 위치)
-  { keyword: '고등어', color: '#78909C' },   // 회청색 (고등어 줄무늬)
-  { keyword: '턱시도', color: '#455A64' },   // 진회색 (검정+흰색)
-  { keyword: '치즈', color: '#F4900C' },     // 주황 (치즈색)
-  { keyword: '삼색', color: '#C2185B' },     // 핑크 (삼색 패치)
-  { keyword: '흰색', color: '#5B8ECC' },    // 하늘색 (흰색 대비)
-  { keyword: '검정', color: '#546E7A' },    // 어두운 청회색
-  // 일반 코리안숏헤어
+  { keyword: '고등어', color: '#78909C' },
+  { keyword: '턱시도', color: '#455A64' },
+  { keyword: '치즈', color: '#F4900C' },
+  { keyword: '삼색', color: '#C2185B' },
+  { keyword: '흰색', color: '#5B8ECC' },
+  { keyword: '검정', color: '#546E7A' },
   { keyword: '코리안', color: '#E9785A' },
-  // 외국 품종
   { keyword: '페르시안', color: '#9E9E9E' },
   { keyword: '러시안', color: '#607D8B' },
   { keyword: '샴', color: '#8D6E63' },
@@ -48,43 +46,141 @@ type CatsCtx = {
   cats: Cat[]
   selectedId: string
   selectedCat: Cat
+  userId?: string
+  loading: boolean
   selectCat: (id: string) => void
-  addCat: (c: Omit<Cat, 'id'>) => void
-  updateCat: (id: string, c: Partial<Omit<Cat, 'id'>>) => void
-  removeCat: (id: string) => void
+  addCat: (c: Omit<Cat, 'id'>) => Promise<void>
+  updateCat: (id: string, c: Partial<Omit<Cat, 'id'>>) => Promise<void>
+  removeCat: (id: string) => Promise<void>
 }
 
-const DEFAULT_CATS: Cat[] = [
-  { id: '1', name: '나비', breed: '코리안숏헤어', ageYears: 3, weightKg: 4.2, gender: 'female', neutered: true },
-]
+const DEFAULT_CAT: Cat = {
+  id: '__guest__',
+  name: '나비',
+  breed: '코리안숏헤어',
+  ageYears: 3,
+  weightKg: 4.2,
+  gender: 'female',
+  neutered: true,
+}
+
+const FIELD_MAP: Record<string, string> = {
+  name: 'name',
+  breed: 'breed',
+  ageYears: 'age_years',
+  birthDate: 'birth_date',
+  weightKg: 'weight_kg',
+  gender: 'gender',
+  neutered: 'neutered',
+  photoUri: 'photo_url',
+}
+
+function dbRowToCat(row: Record<string, unknown>): Cat {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    breed: (row.breed as string) || '',
+    ageYears: (row.age_years as number) || 0,
+    birthDate: (row.birth_date as string | null) ?? undefined,
+    weightKg: parseFloat(String(row.weight_kg)) || 0,
+    gender: row.gender as 'male' | 'female',
+    neutered: Boolean(row.neutered),
+    photoUri: (row.photo_url as string | null) ?? undefined,
+  }
+}
 
 const CatsContext = createContext<CatsCtx | null>(null)
 
-export function CatsProvider({ children }: { children: ReactNode }) {
-  const [cats, setCats] = useState<Cat[]>(DEFAULT_CATS)
-  const [selectedId, setSelectedId] = useState(DEFAULT_CATS[0].id)
+export function CatsProvider({ children, userId }: { children: ReactNode; userId?: string }) {
+  const [cats, setCats] = useState<Cat[]>([])
+  const [selectedId, setSelectedId] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const selectedCat = cats.find(c => c.id === selectedId) ?? cats[0]
+  useEffect(() => {
+    if (!userId) {
+      setCats([DEFAULT_CAT])
+      setSelectedId(DEFAULT_CAT.id)
+      return
+    }
+    setLoading(true)
+    supabase
+      .from('cats')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const mapped = data.map(r => dbRowToCat(r as Record<string, unknown>))
+          setCats(mapped)
+          setSelectedId(mapped[0].id)
+        } else {
+          setCats([])
+          setSelectedId('')
+        }
+        setLoading(false)
+      })
+  }, [userId])
 
-  const addCat = (c: Omit<Cat, 'id'>) => {
-    const newCat = { ...c, id: Date.now().toString() }
-    setCats(prev => [...prev, newCat])
-    setSelectedId(newCat.id)
+  const selectedCat = cats.find(c => c.id === selectedId) ?? cats[0] ?? DEFAULT_CAT
+
+  const addCat = async (c: Omit<Cat, 'id'>) => {
+    if (!userId) {
+      const newCat: Cat = { ...c, id: Date.now().toString() }
+      setCats(prev => [...prev, newCat])
+      setSelectedId(newCat.id)
+      return
+    }
+    const { data } = await supabase
+      .from('cats')
+      .insert({
+        user_id: userId,
+        name: c.name,
+        breed: c.breed,
+        age_years: c.ageYears,
+        birth_date: c.birthDate ?? null,
+        weight_kg: c.weightKg,
+        gender: c.gender,
+        neutered: c.neutered,
+        photo_url: c.photoUri ?? null,
+      })
+      .select()
+      .single()
+    if (data) {
+      const newCat = dbRowToCat(data as Record<string, unknown>)
+      setCats(prev => [...prev, newCat])
+      setSelectedId(newCat.id)
+    }
   }
 
-  const updateCat = (id: string, updates: Partial<Omit<Cat, 'id'>>) =>
+  const updateCat = async (id: string, updates: Partial<Omit<Cat, 'id'>>) => {
     setCats(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c))
+    if (!userId || id === '__guest__') return
 
-  const removeCat = (id: string) => {
+    const dbUpdates: Record<string, unknown> = {}
+    for (const [jsKey, dbKey] of Object.entries(FIELD_MAP)) {
+      if (jsKey in updates) {
+        const val = (updates as Record<string, unknown>)[jsKey]
+        dbUpdates[dbKey] = val === undefined ? null : val
+      }
+    }
+    await supabase.from('cats').update(dbUpdates).eq('id', id).eq('user_id', userId)
+  }
+
+  const removeCat = async (id: string) => {
     setCats(prev => {
       const next = prev.filter(c => c.id !== id)
       if (selectedId === id && next.length > 0) setSelectedId(next[0].id)
       return next
     })
+    if (!userId || id === '__guest__') return
+    await supabase.from('cats').delete().eq('id', id).eq('user_id', userId)
   }
 
   return (
-    <CatsContext.Provider value={{ cats, selectedId, selectedCat, selectCat: setSelectedId, addCat, updateCat, removeCat }}>
+    <CatsContext.Provider value={{
+      cats, selectedId, selectedCat, userId, loading,
+      selectCat: setSelectedId, addCat, updateCat, removeCat,
+    }}>
       {children}
     </CatsContext.Provider>
   )

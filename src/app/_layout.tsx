@@ -31,7 +31,7 @@ export default function RootLayout() {
   if (!__DEV__ && session === undefined) return null
 
   const content = (
-    <CatsProvider>
+    <CatsProvider userId={session?.user.id}>
       <AnimatedSplashOverlay />
       {(__DEV__ || session || guestMode) ? <AppTabs /> : <LoginScreen onGuest={() => setGuestMode(true)} />}
     </CatsProvider>

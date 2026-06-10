@@ -1,10 +1,11 @@
 import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import { useCats, catAvatarColor } from '@/lib/cats-context'
+import { supabase } from '@/lib/supabase'
 
 // ─── Types ───────────────────────────────────────────────
 type ExamRecord = {
@@ -28,21 +29,6 @@ const BLOOD_METRICS: MetricDef[] = [
   { key: 'potassium',  label: 'K',       unit: 'mEq/L', min: 3.5,  max: 5.8  },
 ]
 
-// ─── Sample data (Supabase 연동 시 fetch로 교체) ──────────
-const INIT_BLOOD: ExamRecord[] = [
-  {
-    id: '1', catId: '1', date: '2025-11-12', type: 'blood',
-    metrics: { bun: 28.4, creatinine: 1.2, alt: 52, ast: 35, glucose: 98, phosphorus: 4.5, potassium: 4.1 },
-  },
-  {
-    id: '2', catId: '1', date: '2025-08-07', type: 'blood',
-    metrics: { bun: 25.0, creatinine: 1.1, alt: 40, ast: 30, glucose: 102, phosphorus: 4.2, potassium: 3.9 },
-  },
-  {
-    id: '3', catId: '1', date: '2025-02-14', type: 'blood',
-    metrics: { bun: 30.1, creatinine: 1.3, alt: 38, ast: 28, glucose: 90, phosphorus: 3.8, potassium: 4.3 },
-  },
-]
 
 const VACCINATIONS = [
   { name: '종합백신 (FVRCP)', detail: '2025년 3월 5일 · 다음 접종 2026년 3월', done: true },
@@ -99,27 +85,58 @@ function MetricBars({ records, defItem, range }: {
 type PanelType = 'blood' | 'blood-chart' | 'blood-add' | 'urine' | null
 
 export default function HospitalScreen() {
-  const { selectedCat } = useCats()
-  const [bloodRecords, setBloodRecords] = useState<ExamRecord[]>(INIT_BLOOD)
+  const { selectedCat, userId } = useCats()
+  const [bloodRecords, setBloodRecords] = useState<ExamRecord[]>([])
   const [panel, setPanel] = useState<PanelType>(null)
   const [chartMetric, setChartMetric] = useState(BLOOD_METRICS[0].key)
   const [chartRange, setChartRange] = useState<'monthly' | 'yearly'>('yearly')
   const [addDate, setAddDate] = useState('')
   const [addMetrics, setAddMetrics] = useState<Record<string, string>>({})
 
+  useEffect(() => {
+    if (!userId || selectedCat.id === '__guest__') { setBloodRecords([]); return }
+    supabase
+      .from('exam_records')
+      .select('*')
+      .eq('cat_id', selectedCat.id)
+      .eq('type', 'blood')
+      .order('date', { ascending: false })
+      .then(({ data }) => {
+        setBloodRecords((data ?? []).map(r => ({
+          id: r.id as string,
+          catId: r.cat_id as string,
+          date: r.date as string,
+          type: r.type as 'blood' | 'urine',
+          metrics: r.metrics as Record<string, number>,
+        })))
+      })
+  }, [selectedCat.id, userId])
+
   const lastBlood = bloodRecords[0] ?? null
 
-  const saveBloodRecord = () => {
+  const saveBloodRecord = async () => {
     if (!addDate) return
     const metrics: Record<string, number> = {}
     BLOOD_METRICS.forEach(m => {
       const v = parseFloat(addMetrics[m.key] ?? '')
       if (!isNaN(v)) metrics[m.key] = v
     })
-    setBloodRecords(prev =>
-      [{ id: Date.now().toString(), catId: selectedCat.id, date: addDate, type: 'blood' as const, metrics }, ...prev]
-        .sort((a, b) => b.date.localeCompare(a.date))
-    )
+    const newRec: ExamRecord = { id: '', catId: selectedCat.id, date: addDate, type: 'blood', metrics }
+
+    if (!userId || selectedCat.id === '__guest__') {
+      newRec.id = Date.now().toString()
+      setBloodRecords(prev => [newRec, ...prev].sort((a, b) => b.date.localeCompare(a.date)))
+    } else {
+      const { data } = await supabase
+        .from('exam_records')
+        .insert({ cat_id: selectedCat.id, user_id: userId, date: addDate, type: 'blood', metrics })
+        .select()
+        .single()
+      if (data) {
+        newRec.id = data.id as string
+        setBloodRecords(prev => [newRec, ...prev].sort((a, b) => b.date.localeCompare(a.date)))
+      }
+    }
     setAddDate(''); setAddMetrics({})
     setPanel('blood')
   }
