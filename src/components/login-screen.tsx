@@ -42,14 +42,14 @@ export default function LoginScreen({ onGuest }: { onGuest?: () => void }) {
     setSignUpDone(false)
   }
 
-  const handleGoogleSignIn = async () => {
+  const handleSocialSignIn = async (provider: 'google' | 'kakao') => {
     setError('')
     setLoading(true)
     const redirectTo = Platform.OS === 'web'
       ? window.location.href.split('#')[0]
       : undefined
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider,
       options: { redirectTo },
     })
     setLoading(false)
@@ -134,11 +134,19 @@ export default function LoginScreen({ onGuest }: { onGuest?: () => void }) {
                 </View>
                 <TouchableOpacity
                   style={[styles.socialBtn, loading && styles.buttonDisabled]}
-                  onPress={handleGoogleSignIn}
+                  onPress={() => handleSocialSignIn('google')}
                   disabled={loading}
                 >
-                  <Text style={styles.socialBtnIcon}>G</Text>
+                  <Text style={styles.googleIcon}>G</Text>
                   <Text style={styles.socialBtnText}>Google로 계속하기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.socialBtn, styles.kakaoBtn, loading && styles.buttonDisabled]}
+                  onPress={() => handleSocialSignIn('kakao')}
+                  disabled={loading}
+                >
+                  <Text style={styles.kakaoIcon}>K</Text>
+                  <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -270,13 +278,13 @@ const styles = StyleSheet.create({
   socialBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     borderWidth: 1, borderColor: '#E5E5E5', borderRadius: 12,
-    paddingVertical: 13, backgroundColor: '#fff',
+    paddingVertical: 13, backgroundColor: '#fff', marginBottom: 10,
   },
-  socialBtnIcon: {
-    fontSize: 16, fontWeight: '700',
-    color: '#EA4335',
-  },
+  googleIcon: { fontSize: 16, fontWeight: '700', color: '#EA4335' },
   socialBtnText: { fontSize: 15, color: '#333', fontWeight: '500' },
+  kakaoBtn: { backgroundColor: '#FEE500', borderColor: '#FEE500' },
+  kakaoIcon: { fontSize: 16, fontWeight: '900', color: '#3C1E1E' },
+  kakaoBtnText: { fontSize: 15, color: '#3C1E1E', fontWeight: '600' },
   guestBtn: {
     alignItems: 'center',
     marginTop: 20,
