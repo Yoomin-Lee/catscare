@@ -261,13 +261,92 @@ logoIcon: {
 
 ---
 
+---
+
+## 2026-06-10 (Day 4) — Supabase DB 전체 연동
+
+### DB 테이블 생성 (Supabase SQL Editor)
+- `cats`: 고양이 프로필 (id, user_id, name, breed, age_years, birth_date, weight_kg, gender, neutered, photo_url)
+- `weight_records`: 체중 기록 (cat_id, weight_kg, recorded_at)
+- `medications`: 투약 스케줄 (cat_id, name, dosage, frequency, doses_per_day, times[], alarm_on)
+- `exam_records`: 검사 기록 (cat_id, date, type, metrics jsonb)
+- 모든 테이블에 RLS 정책 적용 (auth.uid() = user_id)
+
+### cats-context.tsx 리팩토링
+- 로컬 useState → Supabase CRUD로 전환
+- `userId`, `loading` 컨텍스트에 노출
+- 게스트 모드 (userId 없음): 로컬 상태 유지 (DEFAULT_CAT)
+- `addCat` / `updateCat` / `removeCat` → async Supabase 연동
+
+### body.tsx — 체중 기록 실 데이터
+- `weight_records` 테이블에서 실 데이터 로드
+- 주간/월간/연간 차트 (빈 기록 시 안내 문구)
+- "체중 기록 추가" 버튼 → Supabase INSERT
+- 투약 기록도 `medications` 테이블에서 실 데이터 표시
+
+### medication-section.tsx — Supabase CRUD
+- `useCats()` 로 catId / userId 취득
+- 투약 등록/수정/삭제 → Supabase INSERT/UPDATE/DELETE
+- 알림 토글 → Supabase UPDATE
+
+### hospital.tsx — 검사 기록 Supabase CRUD
+- `INIT_BLOOD` 하드코딩 제거
+- `exam_records` 테이블에서 실 데이터 로드
+- 기록 추가 → Supabase INSERT
+
+---
+
+## 2026-06-10 (Day 4 continued) — 소셜 로그인 & 계정 설정
+
+### 24. Google OAuth 활성화
+**파일:** `src/components/login-screen.tsx` / Supabase Management API
+
+- Google Cloud Console에서 OAuth 2.0 클라이언트 생성
+  - Authorized JavaScript origins: `https://kbjxjogmnwurxbxnpfsz.supabase.co`, `https://yoomin-lee.github.io`
+  - Authorized redirect URIs: `https://kbjxjogmnwurxbxnpfsz.supabase.co/auth/v1/callback`
+- Supabase Management API로 Google provider 활성화
+  - `external_google_enabled: true`
+  - `external_google_client_id`, `external_google_secret` 등록
+- Supabase `site_url` → `https://yoomin-lee.github.io` 변경 (기존 localhost:3000)
+- `uri_allow_list`에 `https://yoomin-lee.github.io/catscare` 추가
+
+### 25. 카카오 OAuth 활성화
+**파일:** `src/components/login-screen.tsx` / Supabase Management API
+
+- Kakao Developers에서 CatsCare 앱 생성
+  - 플랫폼 → Web: `https://yoomin-lee.github.io` 등록
+  - Kakao 로그인 활성화, 동의항목 이메일 설정
+  - Redirect URI: `https://kbjxjogmnwurxbxnpfsz.supabase.co/auth/v1/callback`
+  - Client Secret 발급 및 활성화
+- Supabase Management API로 Kakao provider 활성화
+  - `external_kakao_enabled: true`
+  - REST API 키(client_id) + Client Secret 등록
+- 로그인 화면에 **카카오 노란 버튼** 추가
+- `handleGoogleSignIn` → `handleSocialSignIn(provider)` 로 통합
+
+### 26. 계정 설정 UI (홈 헤더 ⚙️)
+**파일:** `src/app/home.tsx`
+
+- 홈 탭 헤더 우상단 ⚙️ 버튼 추가
+- 탭 시 계정 설정 바텀시트 오픈:
+  - `supabase.auth.getUser()` 로 현재 유저 정보 조회
+  - `user.identities[0].provider` 로 연결 방식 판별 (google / email / kakao)
+  - 연결 계정 유형 뱃지 (Google=빨강, 이메일=보라, 카카오=노랑) + 이메일 표시
+  - **로그아웃** 버튼 (`supabase.auth.signOut()`)
+  - 게스트 모드: "로그인하면 데이터가 저장돼요" 안내
+
+---
+
 ## 남은 작업 (TODO)
 
-- [ ] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장 (`exam_records` 테이블 생성 필요)
-- [ ] Google 로그인 활성화 (Google Cloud Console OAuth 클라이언트 생성 + Supabase Provider 설정)
-- [ ] 카카오 / 네이버 소셜 로그인 연동
+- [x] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장
+- [x] 체중 기록 DB 저장 + 그래프 실 데이터
+- [x] 투약 데이터 DB 저장
+- [x] Google 로그인 활성화
+- [x] 카카오 소셜 로그인 연동
+- [x] 계정 설정 UI (연결 계정 확인 + 로그아웃)
+- [ ] 카카오 KOE205 오류 해결 (앱 상태 / Client Secret 활성화 확인 필요)
 - [ ] 소변 검사 기록 UI 구현
-- [ ] 체중 기록 DB 저장 + 그래프 실 데이터
 - [ ] 푸시 알림 실제 발송 연동 (Expo Notifications)
 - [ ] 다크모드 지원
 - [ ] 모바일 앱 빌드 (iOS / Android)
