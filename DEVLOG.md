@@ -337,15 +337,130 @@ logoIcon: {
 
 ---
 
+---
+
+## 2026-06-10 (Day 5) — 혈액검사 고도화 · OCR · 접종 기록
+
+### 27. 카카오 로그인 제거
+**파일:** `src/components/login-screen.tsx`
+
+- 개인 Kakao 앱은 이메일 scope 비지원 (비즈앱 전환 필요) → KOE205 오류 구조적 해결 불가
+- 카카오 버튼 및 관련 스타일 완전 제거
+- `handleSocialSignIn('google' | 'kakao')` → `handleSocialSignIn('google')` 로 단순화
+
+---
+
+### 28. 혈액검사 항목 실제 검사지 기반 업데이트
+**파일:** `src/app/hospital.tsx`
+
+GitHub에 업로드된 실제 Vcheck C10 혈액검사 결과지 이미지 4장 분석 후 전면 교체.
+
+**기존 7개 → Vcheck C10 기반 17개로 확장:**
+
+| 그룹 | 항목 | 정상 범위 | 단위 |
+|---|---|---|---|
+| 기본 수치 | GLU | 74–152 | mg/dL |
+| | BUN | 15.0–37.0 | mg/dL |
+| | CREA | 0.7–2.1 | mg/dL |
+| | Ca | 2.6–6.4 | mg/dL |
+| | TP | 5.8–9.1 | g/dL |
+| | ALB | 2.2–4.1 | g/dL |
+| | GLOB | 2.6–5.1 | g/dL |
+| 간 수치 | ALT | 13–109 | U/L |
+| | ALP | 9–109 | U/L |
+| | GGT | 0–5 | U/L |
+| | TBIL | 0.00–1.00 | mg/dL |
+| 콜레스테롤/췌장 | CHOL | 50–230 | mg/dL |
+| | AMY | 500–1400 | U/L |
+| | LIPA | 0–30 | U/L |
+| 특수 검사 | NT-proBNP | < 100 | pmol/L |
+| | fSAA | < 5 | ug/mL |
+| | SDMA | ≤ 14 | ug/dL |
+
+- `BLOOD_GROUPS: MetricGroup[]` 구조로 4개 그룹 분류
+- 수치 입력 폼: 그룹 헤더 구분 + OCR 자동 입력값 초록 배경 강조
+
+---
+
+### 29. 혈액검사 OCR 자동 입력 (검사지 사진 → 수치 자동 등록)
+**파일:** `src/app/hospital.tsx`, `supabase/functions/ocr-blood-test/index.ts`
+
+**아키텍처:**
+```
+앱 (ImagePicker) → base64 인코딩
+  → Supabase Edge Function (ocr-blood-test)
+    → Anthropic Claude Haiku Vision API
+      → JSON 파싱 → 수치 자동 입력
+```
+
+**Supabase Edge Function (`supabase/functions/ocr-blood-test/index.ts`):**
+- 외부 SDK 없이 순수 `fetch`로 Anthropic API 직접 호출
+- CORS 헤더 설정 (웹 앱 호출 허용)
+- `ANTHROPIC_API_KEY` 환경 변수로 API 키 보안 관리
+- 응답에서 JSON 블록 추출 → `<5` → `5`, `<0.10` → `0.10` 변환
+
+**앱 구현:**
+- "검사지 촬영으로 자동 입력" 초록 버튼 (기록 추가 패널 최상단)
+- 탭 시 선택 모달:
+  - **카메라 촬영** (`ImagePicker.launchCameraAsync`)
+  - **갤러리에서 선택** (`ImagePicker.launchImageLibraryAsync`)
+- `base64: true, quality: 0.7` 옵션으로 이미지 압축
+- Supabase Auth JWT를 Authorization 헤더에 자동 첨부
+- OCR 분석 중 로딩 인디케이터 표시
+- 인식된 수치: 초록 배경(`#E8F5F0`) 으로 강조 표시
+
+**활성화 조건:**
+- Supabase Edge Functions → `ocr-blood-test` → Secrets 탭
+- `ANTHROPIC_API_KEY` = Anthropic Console에서 발급한 `sk-ant-...` 키 등록 필요
+
+---
+
+### 30. 접종 기록 CRUD 구현
+**파일:** `src/app/hospital.tsx`, `supabase/schema.sql`
+
+**DB 스키마 추가:**
+```sql
+CREATE TABLE vaccinations (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cat_id      UUID REFERENCES cats(id) ON DELETE CASCADE,
+  user_id     UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  date        DATE NOT NULL,
+  next_date   DATE,
+  notes       TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+-- RLS: auth.uid() = user_id
+```
+
+**UI:**
+- "접종 체크" 섹션 우상단 **"+ 추가"** 버튼
+- 기록 없을 때 빈 상태 안내 문구 (탭 시 추가 패널 오픈)
+- 접종 추가 BottomSheet:
+  - **백신 종류** 프리셋 칩 (FVRCP · 광견병 · FeLV · FIP · 클라미디아 · 직접 입력)
+  - **접종일** 캘린더 드롭다운 (오늘 이후 비활성)
+  - **다음 접종 예정일** 캘린더 드롭다운 (선택)
+  - **메모** 멀티라인 입력 (선택)
+- 접종 카드:
+  - 접종일 + 다음 접종 예정일 표시
+  - 다음 접종일이 오늘 이전이면 **"접종 필요"** 주황 배지 자동 표시
+  - 🗑 삭제 버튼 (즉시 반영)
+- Supabase 연동: 로그인 시 INSERT/DELETE, 게스트 모드 시 로컬 상태
+
+---
+
 ## 남은 작업 (TODO)
 
 - [x] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장
 - [x] 체중 기록 DB 저장 + 그래프 실 데이터
 - [x] 투약 데이터 DB 저장
 - [x] Google 로그인 활성화
-- [x] 카카오 소셜 로그인 연동
+- [x] 카카오 소셜 로그인 연동 → 개인 앱 한계로 제거
 - [x] 계정 설정 UI (연결 계정 확인 + 로그아웃)
-- [ ] 카카오 KOE205 오류 해결 (앱 상태 / Client Secret 활성화 확인 필요)
+- [x] 혈액검사 항목 실제 검사지 기반 업데이트 (Vcheck C10)
+- [x] 혈액검사 OCR 자동 입력 (Supabase Edge Function + Anthropic Vision)
+- [x] 접종 기록 CRUD (추가 / 삭제 / Supabase 연동)
+- [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] 소변 검사 기록 UI 구현
 - [ ] 푸시 알림 실제 발송 연동 (Expo Notifications)
 - [ ] 다크모드 지원
