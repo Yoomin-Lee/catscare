@@ -426,7 +426,18 @@ export default function AlarmScreen() {
             {sandDays >= 0 ? `D-${sandDays}` : `D+${Math.abs(sandDays)}`}
           </Text>
         </View>
-        <View style={[styles.toggleRow, { marginTop: 8 }]}>
+        <Text style={[styles.fieldLabel, { marginTop: 16 }]}>즐겨 쓰는 모래 바로가기</Text>
+        {[
+          { label: '두부 모래 구매 (쿠팡)', url: 'https://www.coupang.com/np/search?q=두부모래' },
+          { label: '벤토나이트 모래 (쿠팡)', url: 'https://www.coupang.com/vp/products/1349710539?itemId=28075863531&vendorItemId=95032406165&q=%EC%98%A4%EB%8D%94%EC%BA%85+%EB%AC%B4%ED%96%A5&searchId=63508eff1405195&sourceType=search&itemsCount=60&searchRank=2&rank=2&traceId=mq6o2tm0' },
+        ].map(item => (
+          <TouchableOpacity key={item.label} style={styles.linkBtnFull} onPress={() => Linking.openURL(item.url)}>
+            <Feather name="shopping-cart" size={14} color="#1D9E75" />
+            <Text style={styles.linkBtnFullText}>{item.label}</Text>
+            <Feather name="external-link" size={12} color="#1D9E75" />
+          </TouchableOpacity>
+        ))}
+        <View style={[styles.toggleRow, { marginTop: 16 }]}>
           <View style={styles.toggleInfo}>
             <Text style={styles.toggleLabel}>교체 알림</Text>
             {alarms.sand
@@ -503,17 +514,6 @@ export default function AlarmScreen() {
             )}
           </View>
         )}
-        <Text style={[styles.fieldLabel, { marginTop: 16 }]}>즐겨 쓰는 모래 바로가기</Text>
-        {[
-          { label: '두부 모래 구매 (쿠팡)', url: 'https://www.coupang.com/np/search?q=두부모래' },
-          { label: '벤토나이트 모래 (쿠팡)', url: 'https://www.coupang.com/vp/products/1349710539?itemId=28075863531&vendorItemId=95032406165&q=%EC%98%A4%EB%8D%94%EC%BA%85+%EB%AC%B4%ED%96%A5&searchId=63508eff1405195&sourceType=search&itemsCount=60&searchRank=2&rank=2&traceId=mq6o2tm0' },
-        ].map(item => (
-          <TouchableOpacity key={item.label} style={styles.linkBtnFull} onPress={() => Linking.openURL(item.url)}>
-            <Feather name="shopping-cart" size={14} color="#1D9E75" />
-            <Text style={styles.linkBtnFullText}>{item.label}</Text>
-            <Feather name="external-link" size={12} color="#1D9E75" />
-          </TouchableOpacity>
-        ))}
         <Text style={[styles.fieldLabel, { marginTop: 20 }]}>교체 기록</Text>
         <View style={styles.historyList}>
           {sandHistory.map((d, i) => (
