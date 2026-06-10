@@ -10,11 +10,86 @@ import BottomSheet from '@/components/bottom-sheet'
 type WeightRecord = {
   id: string
   weightKg: number
-  date: string  // 'YYYY-MM-DD'
+  date: string
 }
 
 const FREQ_LABEL: Record<string, string> = {
   daily: '매일', every_other: '격일', weekly: '매주', monthly: '매월',
+}
+
+const WEEK_LABELS = ['일', '월', '화', '수', '목', '금', '토']
+
+function CalendarDropdown({ value, max, onChange }: {
+  value: Date
+  max?: Date
+  onChange: (date: Date) => void
+}) {
+  const [viewYear, setViewYear] = useState(value.getFullYear())
+  const [viewMonth, setViewMonth] = useState(value.getMonth())
+
+  const firstDow = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  const isSelected = (d: number) =>
+    value.getFullYear() === viewYear && value.getMonth() === viewMonth && value.getDate() === d
+  const isDisabled = (d: number) =>
+    max ? new Date(viewYear, viewMonth, d) > max : false
+
+  const blanks = Array.from({ length: firstDow })
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+
+  return (
+    <View style={calStyles.container}>
+      <View style={calStyles.nav}>
+        <TouchableOpacity onPress={prevMonth} hitSlop={10} style={calStyles.navBtn}>
+          <Feather name="chevron-left" size={18} color="#555" />
+        </TouchableOpacity>
+        <Text style={calStyles.navTitle}>{viewYear}년 {viewMonth + 1}월</Text>
+        <TouchableOpacity onPress={nextMonth} hitSlop={10} style={calStyles.navBtn}>
+          <Feather name="chevron-right" size={18} color="#555" />
+        </TouchableOpacity>
+      </View>
+      <View style={calStyles.weekRow}>
+        {WEEK_LABELS.map((w, i) => (
+          <Text key={w} style={[calStyles.weekLabel, i === 0 && calStyles.sun, i === 6 && calStyles.sat]}>{w}</Text>
+        ))}
+      </View>
+      <View style={calStyles.grid}>
+        {blanks.map((_, i) => <View key={`b${i}`} style={calStyles.cell} />)}
+        {days.map(d => {
+          const col = (firstDow + d - 1) % 7
+          const sel = isSelected(d)
+          const dis = isDisabled(d)
+          return (
+            <TouchableOpacity
+              key={d}
+              style={[calStyles.cell, sel && calStyles.cellSel]}
+              onPress={() => { if (!dis) onChange(new Date(viewYear, viewMonth, d)) }}
+              disabled={dis}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                calStyles.dayText,
+                col === 0 && !sel && calStyles.sun,
+                col === 6 && !sel && calStyles.sat,
+                sel && calStyles.dayTextSel,
+                dis && calStyles.dayTextDis,
+              ]}>{d}</Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+    </View>
+  )
 }
 
 function computeChartData(records: WeightRecord[], period: 'w' | 'm' | 'y') {
@@ -33,33 +108,110 @@ function computeChartData(records: WeightRecord[], period: 'w' | 'm' | 'y') {
   }
 }
 
-function WeightChart({ data }: { data: { labels: string[]; values: number[] } | null }) {
+function WeightLineChart({ data }: { data: { labels: string[]; values: number[] } | null }) {
+  const [chartWidth, setChartWidth] = useState(0)
+
   if (!data) return <Text style={styles.emptyChart}>아직 체중 기록이 없어요</Text>
+
   const { labels, values } = data
-  const min = Math.min(...values) - 0.1
-  const max = Math.max(...values) + 0.1
-  const range = max - min || 1
-  const CHART_H = 90
+  const CHART_H = 100
+  const PAD = 10
+  const n = values.length
+  const minV = Math.min(...values) - 0.2
+  const maxV = Math.max(...values) + 0.2
+  const range = maxV - minV || 1
+
+  const getX = (i: number) =>
+    n > 1 ? (i / (n - 1)) * (chartWidth - PAD * 2) + PAD : chartWidth / 2
+  const getY = (v: number) =>
+    CHART_H * (1 - (v - minV) / range)
+
+  const points = values.map((v, i) => ({ x: getX(i), y: getY(v) }))
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_H + 28, gap: 2 }}>
-      {values.map((val, i) => {
-        const barH = Math.max(Math.round(((val - min) / range) * CHART_H), 4)
-        return (
-          <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
-            <View style={{ alignItems: 'center', justifyContent: 'flex-end', height: CHART_H }}>
-              <View style={{ width: '70%', height: barH, backgroundColor: '#E1F5EE', borderRadius: 4, alignItems: 'center' }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#1D9E75', marginTop: -4 }} />
-              </View>
-            </View>
-            <Text style={{ fontSize: 8, color: '#aaa', marginTop: 5, textAlign: 'center' }}>{labels[i]}</Text>
-          </View>
-        )
-      })}
+    <View onLayout={e => setChartWidth(e.nativeEvent.layout.width)}>
+      <View style={{ height: CHART_H + 32, position: 'relative' }}>
+        {chartWidth > 0 && (
+          <>
+            {/* 선 */}
+            {points.slice(0, -1).map((p, i) => {
+              const next = points[i + 1]
+              const dx = next.x - p.x
+              const dy = next.y - p.y
+              const len = Math.sqrt(dx * dx + dy * dy)
+              const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+              const cx = (p.x + next.x) / 2
+              const cy = (p.y + next.y) / 2
+              return (
+                <View
+                  key={`line-${i}`}
+                  style={{
+                    position: 'absolute',
+                    left: cx - len / 2,
+                    top: cy - 1.5,
+                    width: len,
+                    height: 3,
+                    backgroundColor: '#1D9E75',
+                    borderRadius: 2,
+                    transform: [{ rotate: `${angle}deg` }],
+                  }}
+                />
+              )
+            })}
+            {/* 점 */}
+            {points.map((p, i) => (
+              <View key={`dot-${i}`} style={{
+                position: 'absolute',
+                left: p.x - 5,
+                top: p.y - 5,
+                width: 10,
+                height: 10,
+                borderRadius: 5,
+                backgroundColor: '#1D9E75',
+                borderWidth: 2,
+                borderColor: '#fff',
+              }} />
+            ))}
+            {/* 체중값 */}
+            {points.map((p, i) => (
+              <Text key={`val-${i}`} style={{
+                position: 'absolute',
+                left: p.x - 22,
+                top: p.y - 20,
+                width: 44,
+                textAlign: 'center',
+                fontSize: 9,
+                fontWeight: '600',
+                color: '#1D9E75',
+              }}>{values[i].toFixed(1)}kg</Text>
+            ))}
+            {/* X축 날짜 */}
+            {points.map((p, i) => (
+              <Text key={`label-${i}`} style={{
+                position: 'absolute',
+                left: p.x - 20,
+                top: CHART_H + 8,
+                width: 40,
+                textAlign: 'center',
+                fontSize: 8,
+                color: '#aaa',
+              }}>{labels[i]}</Text>
+            ))}
+          </>
+        )}
+      </View>
     </View>
   )
 }
 
 type MedRow = { id: string; name: string; detail: string }
+
+function fmtDate(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}년 ${m}월 ${day}일`
+}
 
 export default function BodyScreen() {
   const { selectedCat, userId } = useCats()
@@ -68,7 +220,8 @@ export default function BodyScreen() {
   const [meds, setMeds] = useState<MedRow[]>([])
   const [addSheet, setAddSheet] = useState(false)
   const [addWeight, setAddWeight] = useState('')
-  const [addDate, setAddDate] = useState('')
+  const [addDate, setAddDate] = useState<Date>(new Date())
+  const [showDatePicker, setShowDatePicker] = useState(false)
 
   useEffect(() => {
     if (!userId || selectedCat.id === '__guest__') { setRecords([]); return }
@@ -102,16 +255,20 @@ export default function BodyScreen() {
   }, [selectedCat.id, userId])
 
   const openAdd = () => {
-    const today = new Date().toISOString().split('T')[0]
-    setAddWeight(String(selectedCat.weightKg || ''))
-    setAddDate(today)
+    setAddWeight('')
+    setAddDate(new Date())
+    setShowDatePicker(false)
     setAddSheet(true)
   }
 
   const saveRecord = async () => {
     const w = parseFloat(addWeight)
-    if (isNaN(w) || w <= 0 || !addDate) return
-    const newRec: WeightRecord = { id: '', weightKg: w, date: addDate }
+    if (isNaN(w) || w <= 0) return
+    const y = addDate.getFullYear()
+    const m = String(addDate.getMonth() + 1).padStart(2, '0')
+    const d = String(addDate.getDate()).padStart(2, '0')
+    const dateStr = `${y}-${m}-${d}`
+    const newRec: WeightRecord = { id: '', weightKg: w, date: dateStr }
 
     if (!userId || selectedCat.id === '__guest__') {
       newRec.id = Date.now().toString()
@@ -119,7 +276,7 @@ export default function BodyScreen() {
     } else {
       const { data } = await supabase
         .from('weight_records')
-        .insert({ cat_id: selectedCat.id, user_id: userId, weight_kg: w, recorded_at: addDate })
+        .insert({ cat_id: selectedCat.id, user_id: userId, weight_kg: w, recorded_at: dateStr })
         .select()
         .single()
       if (data) {
@@ -153,7 +310,6 @@ export default function BodyScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-        {/* 통계 */}
         <View style={styles.statRow}>
           <View style={styles.statBox}>
             <Text style={styles.statNum}>{currentWeight.toFixed(1)}<Text style={styles.statUnit}>kg</Text></Text>
@@ -180,7 +336,6 @@ export default function BodyScreen() {
           </View>
         </View>
 
-        {/* 차트 */}
         <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
             <Text style={styles.chartTitle}>체중 추이</Text>
@@ -197,7 +352,7 @@ export default function BodyScreen() {
               ))}
             </View>
           </View>
-          <WeightChart data={chartData} />
+          <WeightLineChart data={chartData} />
         </View>
 
         <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
@@ -205,7 +360,6 @@ export default function BodyScreen() {
           <Text style={styles.addBtnText}>체중 기록 추가</Text>
         </TouchableOpacity>
 
-        {/* 투약 기록 */}
         <Text style={styles.sectionTitle}>투약 기록</Text>
         {meds.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -229,25 +383,32 @@ export default function BodyScreen() {
 
       </ScrollView>
 
-      {/* 체중 추가 시트 */}
       <BottomSheet visible={addSheet} onClose={() => setAddSheet(false)} title="체중 기록 추가">
         <Text style={styles.fieldLabel}>체중 (kg)</Text>
         <TextInput
           style={styles.input}
-          placeholder="예: 4.20"
+          placeholder="0.00kg"
           placeholderTextColor="#bbb"
           keyboardType="decimal-pad"
           value={addWeight}
           onChangeText={v => { if (/^\d*\.?\d{0,2}$/.test(v)) setAddWeight(v) }}
         />
         <Text style={[styles.fieldLabel, { marginTop: 14 }]}>측정일</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#bbb"
-          value={addDate}
-          onChangeText={setAddDate}
-        />
+        <TouchableOpacity
+          style={[styles.dateBtn, showDatePicker && styles.dateBtnOpen]}
+          onPress={() => setShowDatePicker(v => !v)}
+        >
+          <Feather name="calendar" size={15} color="#888" />
+          <Text style={styles.dateBtnText}>{fmtDate(addDate)}</Text>
+          <Feather name={showDatePicker ? 'chevron-up' : 'chevron-down'} size={14} color="#aaa" />
+        </TouchableOpacity>
+        {showDatePicker && (
+          <CalendarDropdown
+            value={addDate}
+            max={new Date()}
+            onChange={date => { setAddDate(date); setShowDatePicker(false) }}
+          />
+        )}
         <TouchableOpacity style={styles.saveBtn} onPress={saveRecord}>
           <Text style={styles.saveBtnText}>저장하기</Text>
         </TouchableOpacity>
@@ -297,6 +458,34 @@ const styles = StyleSheet.create({
   emptyCardText: { fontSize: 13, color: '#bbb', textAlign: 'center', lineHeight: 20 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#999', marginBottom: 8 },
   input: { backgroundColor: '#F7F7F7', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#1a1a1a', borderWidth: 0.5, borderColor: '#E5E5E5' },
+  dateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#F7F7F7', borderRadius: 10, borderWidth: 0.5, borderColor: '#E5E5E5',
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  dateBtnOpen: { borderColor: '#1D9E75', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  dateBtnText: { flex: 1, fontSize: 14, color: '#1a1a1a' },
   saveBtn: { backgroundColor: '#1D9E75', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 20 },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+})
+
+const calStyles = StyleSheet.create({
+  container: {
+    borderWidth: 0.5, borderColor: '#1D9E75', borderTopWidth: 0,
+    borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
+    backgroundColor: '#fff', paddingHorizontal: 8, paddingBottom: 8, marginBottom: 4,
+  },
+  nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+  navBtn: { padding: 4 },
+  navTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  weekRow: { flexDirection: 'row', marginBottom: 4 },
+  weekLabel: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '600', color: '#999', paddingVertical: 4 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 100 },
+  cellSel: { backgroundColor: '#1D9E75' },
+  dayText: { fontSize: 13, color: '#333' },
+  dayTextSel: { color: '#fff', fontWeight: '700' },
+  dayTextDis: { color: '#ddd' },
+  sun: { color: '#E9785A' },
+  sat: { color: '#5B8ECC' },
 })
