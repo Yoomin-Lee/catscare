@@ -57,7 +57,7 @@ type CatsCtx = {
 const DEFAULT_CAT: Cat = {
   id: '__guest__',
   name: '나비',
-  breed: '코리안숏헤어',
+  breed: '코리안숏헤어 (고등어)',
   ageYears: 3,
   weightKg: 4.2,
   gender: 'female',
