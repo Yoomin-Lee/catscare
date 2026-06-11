@@ -6,6 +6,7 @@ import type { Session } from '@supabase/supabase-js'
 
 import { supabase } from '@/lib/supabase'
 import { CatsProvider } from '@/lib/cats-context'
+import { AuthContext } from '@/lib/auth-context'
 import { AnimatedSplashOverlay } from '@/components/animated-icon'
 import AppTabs from '@/components/app-tabs'
 import LoginScreen from '@/components/login-screen'
@@ -31,10 +32,12 @@ export default function RootLayout() {
   if (!__DEV__ && session === undefined) return null
 
   const content = (
-    <CatsProvider userId={session?.user.id}>
-      <AnimatedSplashOverlay />
-      {(__DEV__ || session || guestMode) ? <AppTabs /> : <LoginScreen onGuest={() => setGuestMode(true)} />}
-    </CatsProvider>
+    <AuthContext.Provider value={{ exitGuestMode: () => setGuestMode(false) }}>
+      <CatsProvider userId={session?.user.id}>
+        <AnimatedSplashOverlay />
+        {(__DEV__ || session || guestMode) ? <AppTabs /> : <LoginScreen onGuest={() => setGuestMode(true)} />}
+      </CatsProvider>
+    </AuthContext.Provider>
   )
 
   return (

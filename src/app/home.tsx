@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import { useCats, catAvatarColor, type Cat } from '@/lib/cats-context'
+import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 
 const NOW = new Date()
@@ -85,6 +86,7 @@ const PROVIDER_ICON: Record<AccountInfo['provider'], string> = {
 
 export default function HomeScreen() {
   const { cats, selectedId, selectedCat, selectCat, addCat, updateCat, removeCat } = useCats()
+  const { exitGuestMode } = useAuth()
 
   const [sheetMode, setSheetMode] = useState<'add' | 'edit' | 'settings' | null>(null)
   const [account, setAccount] = useState<AccountInfo | null>(null)
@@ -355,6 +357,9 @@ export default function HomeScreen() {
           <View style={styles.guestAccountCard}>
             <Feather name="user" size={28} color="#bbb" />
             <Text style={styles.guestAccountText}>게스트 모드로 사용 중이에요{'\n'}로그인하면 데이터가 저장돼요</Text>
+            <TouchableOpacity style={styles.guestLoginBtn} onPress={() => { setSheetMode(null); exitGuestMode() }}>
+              <Text style={styles.guestLoginBtnText}>로그인하러 가기</Text>
+            </TouchableOpacity>
           </View>
         )}
       </BottomSheet>
@@ -549,6 +554,8 @@ const styles = StyleSheet.create({
   logoutBtnText: { color: '#E9785A', fontWeight: '600', fontSize: 14 },
   guestAccountCard: { alignItems: 'center', gap: 12, paddingVertical: 24 },
   guestAccountText: { fontSize: 14, color: '#aaa', textAlign: 'center', lineHeight: 22 },
+  guestLoginBtn: { backgroundColor: '#E9785A', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 28, marginTop: 4 },
+  guestLoginBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
   sectionTitle: { fontSize: 11, fontWeight: '600', color: '#aaa', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10, marginTop: 8 },
