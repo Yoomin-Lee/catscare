@@ -47,6 +47,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "predeploy": "node -e \"require('fs').copyFileSync('dist/index.html', 'dist/404.html')\"",
     "deploy": "npx gh-pages -d dist"
   },
   "private": true
