@@ -1,7 +1,7 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router'
+import { DarkTheme, DefaultTheme, ThemeProvider, useRouter } from 'expo-router'
 import Head from 'expo-router/head'
 import { Platform, useColorScheme, View } from 'react-native'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
 import { supabase } from '@/lib/supabase'
@@ -15,15 +15,29 @@ export default function RootLayout() {
   const colorScheme = useColorScheme()
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const [guestMode, setGuestMode] = useState(false)
+  const router = useRouter()
+  const didNavigateRef = useRef(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
+      if (session && !didNavigateRef.current) {
+        didNavigateRef.current = true
+        router.replace('/home')
+      }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
-      if (session) setGuestMode(false)
+      if (session) {
+        setGuestMode(false)
+        if (!didNavigateRef.current) {
+          didNavigateRef.current = true
+          router.replace('/home')
+        }
+      } else {
+        didNavigateRef.current = false
+      }
     })
 
     return () => subscription.unsubscribe()
