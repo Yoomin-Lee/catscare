@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import MedicationSection from '@/components/medication-section'
 import { useCats, catAvatarColor } from '@/lib/cats-context'
+import { useSchedule } from '@/lib/schedule-context'
 
 function addMonths(date: Date, months: number) {
   const d = new Date(date); d.setMonth(d.getMonth() + months); return d
@@ -145,16 +146,24 @@ function getBadgeStyle(days: number) {
 
 export default function AlarmScreen() {
   const { selectedCat } = useCats()
-  const [hospitalLastDate, setHospitalLastDate] = useState(new Date('2025-11-12'))
-  const [hospitalCycle, setHospitalCycle] = useState(6)
+  const { getSchedule, updateSchedule } = useSchedule()
+  const schedule = getSchedule(selectedCat.id)
+  const hospitalLastDate = schedule.hospitalLastDate
+  const hospitalCycle = schedule.hospitalCycle
+  const sandLastDate = schedule.sandLastDate
+  const sandCycle = schedule.sandCycle
+  const setHospitalLastDate = (d: Date) => updateSchedule(selectedCat.id, { hospitalLastDate: d })
+  const setHospitalCycle = (v: number) => updateSchedule(selectedCat.id, { hospitalCycle: v })
+  const setSandCycle = (fn: ((v: number) => number) | number) => {
+    const next = typeof fn === 'function' ? fn(sandCycle) : fn
+    updateSchedule(selectedCat.id, { sandCycle: next })
+  }
   const [showHospitalPicker, setShowHospitalPicker] = useState(false)
-  const [sandLastDate, setSandLastDate] = useState(new Date('2025-11-20'))
-  const [sandHistory, setSandHistory] = useState<Date[]>([new Date('2025-11-20')])
-  const [sandCycle, setSandCycle] = useState(4)
+  const [sandHistory, setSandHistory] = useState<Date[]>([])
   const [showSandPicker, setShowSandPicker] = useState(false)
 
   const recordSand = (date: Date) => {
-    setSandLastDate(date)
+    updateSchedule(selectedCat.id, { sandLastDate: date })
     setSandHistory(prev => {
       const key = fmt(date)
       const deduped = prev.filter(d => fmt(d) !== key)

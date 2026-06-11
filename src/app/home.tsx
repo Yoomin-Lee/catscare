@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import { useCats, catAvatarColor, type Cat } from '@/lib/cats-context'
 import { useAuth } from '@/lib/auth-context'
+import { useSchedule } from '@/lib/schedule-context'
 import { supabase } from '@/lib/supabase'
 
 const NOW = new Date()
@@ -87,6 +88,16 @@ const PROVIDER_ICON: Record<AccountInfo['provider'], string> = {
 export default function HomeScreen() {
   const { cats, selectedId, selectedCat, selectCat, addCat, updateCat, removeCat } = useCats()
   const { exitGuestMode } = useAuth()
+  const { getSchedule } = useSchedule()
+
+  const schedule = getSchedule(selectedCat.id)
+  const nextHospital = (() => { const d = new Date(schedule.hospitalLastDate); d.setMonth(d.getMonth() + schedule.hospitalCycle); return d })()
+  const nextSand = (() => { const d = new Date(schedule.sandLastDate); d.setDate(d.getDate() + schedule.sandCycle * 7); return d })()
+  const hospitalDays = Math.ceil((nextHospital.setHours(0,0,0,0), nextHospital.getTime() - new Date().setHours(0,0,0,0)) / 86400000)
+  const sandDays = Math.ceil((nextSand.setHours(0,0,0,0), nextSand.getTime() - new Date().setHours(0,0,0,0)) / 86400000)
+  const fmtDate = (d: Date) => `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`
+  const dday = (days: number) => days >= 0 ? `D-${days}` : `D+${Math.abs(days)}`
+  const ddayColor = (days: number) => days <= 3 ? '#BA7517' : days <= 14 ? '#993C1D' : '#1D9E75'
 
   const [sheetMode, setSheetMode] = useState<'add' | 'edit' | 'settings' | null>(null)
   const [account, setAccount] = useState<AccountInfo | null>(null)
@@ -242,16 +253,16 @@ export default function HomeScreen() {
               <Feather name="activity" size={16} color="#E9785A" />
             </View>
             <Text style={styles.scheduleLabel}>정기 병원</Text>
-            <Text style={[styles.scheduleDday, { color: '#993C1D' }]}>D+27</Text>
-            <Text style={styles.scheduleDate}>2026.05.12</Text>
+            <Text style={[styles.scheduleDday, { color: ddayColor(hospitalDays) }]}>{dday(hospitalDays)}</Text>
+            <Text style={styles.scheduleDate}>{fmtDate(nextHospital)}</Text>
           </View>
           <View style={[styles.scheduleCard, { borderLeftColor: '#BA7517' }]}>
             <View style={[styles.scheduleIconWrap, { backgroundColor: '#FAEEDA' }]}>
               <Feather name="refresh-cw" size={16} color="#BA7517" />
             </View>
             <Text style={styles.scheduleLabel}>모래 교체</Text>
-            <Text style={[styles.scheduleDday, { color: '#BA7517' }]}>D+172</Text>
-            <Text style={styles.scheduleDate}>2025.12.18</Text>
+            <Text style={[styles.scheduleDday, { color: ddayColor(sandDays) }]}>{dday(sandDays)}</Text>
+            <Text style={styles.scheduleDate}>{fmtDate(nextSand)}</Text>
           </View>
         </View>
 

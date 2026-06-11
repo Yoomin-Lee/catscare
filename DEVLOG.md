@@ -546,6 +546,42 @@ API 키 등록 즉시 활성화 가능한 구조로 사전 구현.
 | 심장사상충 예방 | 정기 투여 기록용 |
 | 외부기생충 예방 (벼룩·진드기) | 정기 투여 기록용 |
 
+### 40. 접종 백신 칩 레이아웃 수정 (가로 스크롤 → 줄바꿈)
+**파일:** `src/app/hospital.tsx`
+
+- **문제:** 웹에서 마우스로 가로 스크롤 불가 → 우측 칩 선택 불가
+- **원인:** `ScrollView horizontal` 는 터치 입력 기반, 마우스 휠 미지원
+- **해결:** `ScrollView horizontal` → `View flexWrap: 'wrap'` 교체
+  - 칩이 컨테이너 너비에 맞춰 자동 줄바꿈
+  - 웹/모바일 모두 모든 칩 선택 가능
+
+### 41. 홈 탭 "다가오는 일정" 동적 연동
+**파일:** `src/app/home.tsx`, `src/lib/schedule-context.tsx`, `src/app/_layout.tsx`, `src/app/index.tsx`
+
+- **문제:** 홈 탭 일정 카드(정기 병원 · 모래 교체)가 하드코딩 — 고양이 바꿔도 그대로
+- **해결:** `ScheduleContext` 신규 구현으로 주기 알람 데이터를 전역 공유
+
+**`src/lib/schedule-context.tsx`** (신규):
+- `CatSchedule` 타입 정의: `hospitalLastDate`, `hospitalCycle(개월)`, `sandLastDate`, `sandCycle(주)`
+- `ScheduleProvider`: `Record<catId, CatSchedule>` 딕셔너리 상태 관리
+- `getSchedule(catId)`: 없으면 기본값(오늘 기준 1개월 전 + 주기 6개월/4주) 반환
+- `updateSchedule(catId, patch)`: 주기 알람 탭에서 값 변경 시 호출
+
+**`src/app/_layout.tsx`** (수정):
+- `ScheduleProvider` 추가: `AuthContext.Provider > ScheduleProvider > CatsProvider` 순서로 중첩
+
+**`src/app/index.tsx`** (수정):
+- `useState(new Date(...))` 하드코딩 초기값 제거
+- `const { getSchedule, updateSchedule } = useSchedule()` 로 교체
+- `hospitalLastDate`, `hospitalCycle`, `sandLastDate`, `sandCycle` → context에서 파생
+- 세터 함수 → `updateSchedule(catId, patch)` 호출
+
+**`src/app/home.tsx`** (수정):
+- `useSchedule()` → `getSchedule(selectedCat.id)` 로 현재 고양이 일정 조회
+- 다음 방문일/교체일 계산: `setMonth(+hospitalCycle)` / `setDate(+sandCycle*7)`
+- D-day 계산 + 색상 함수 (`ddayColor`: 3일 이내 주황, 14일 이내 빨강, 이후 초록)
+- JSX 하드코딩 `D+27`, `2026.05.12`, `D+172`, `2025.12.18` → 동적 값으로 완전 교체
+
 ---
 
 ## 남은 작업 (TODO)
@@ -562,6 +598,8 @@ API 키 등록 즉시 활성화 가능한 구조로 사전 구현.
 - [x] 로그인 후 홈 탭 자동 이동
 - [x] 게스트 모드 → 로그인 화면 이동 버튼
 - [x] AI Edge Function 사전 설계 (녹음 요약 · 식단 추천)
+- [x] 접종 백신 칩 가로 스크롤 → 줄바꿈 (웹 마우스 지원)
+- [x] 홈 탭 "다가오는 일정" 고양이별 동적 연동 (ScheduleContext)
 - [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] AI 기능 활성화 (OpenAI + Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] 소변 검사 기록 UI 구현
