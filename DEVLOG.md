@@ -449,18 +449,121 @@ CREATE TABLE vaccinations (
 
 ---
 
+---
+
+## 2026-06-11 (Day 6) — 소셜 로그인 완성 · UX 개선 · AI 기반 설계
+
+### 31. 카카오 로그인 재추가 (비즈앱 전환)
+**파일:** `src/components/login-screen.tsx`
+
+- 비즈앱 전환 후 이메일 scope 사용 가능 확인
+- 카카오 버튼 및 스타일 복원 (`kakaoBtn`, `kakaoIcon`, `kakaoBtnText`)
+- `handleSocialSignIn('google' | 'kakao')` 타입 복원
+- Kakao Developers → 플랫폼 → Web 사이트 도메인 `https://yoomin-lee.github.io` 등록 (KOE205 해결)
+- Supabase Dashboard → Auth > Providers > Kakao → REST API 키 + Client Secret 등록
+
+### 32. Google 로그인 Supabase Dashboard 설정 완료
+- Google Cloud Console OAuth 2.0 클라이언트 생성
+- Supabase Auth > Providers > Google 활성화 + Client ID/Secret 등록
+- Redirect URI: `https://kbjxjogmnwurxbxnpfsz.supabase.co/auth/v1/callback`
+- `site_url` + `uri_allow_list`에 `https://yoomin-lee.github.io/catscare` 등록
+
+### 33. 로그인 후 홈 탭 자동 이동
+**파일:** `src/app/_layout.tsx`
+
+- **문제:** 로그인 후 기본 라우트(`/` = 주기 알람)가 표시됨
+- **원인:** 웹에서 URL 기반 라우팅 → `NativeTabs.initialRouteName` 미동작
+- **해결:** `router.replace('/home')` + `useRef`로 중복 실행 방지
+  - `supabase.auth.getSession()` 성공 시 최초 1회 실행
+  - `onAuthStateChange` 로그인 이벤트 시 실행
+  - 로그아웃 시 `didNavigateRef.current = false` 리셋
+
+```tsx
+const didNavigateRef = useRef(false)
+supabase.auth.getSession().then(({ data: { session } }) => {
+  if (session && !didNavigateRef.current) {
+    didNavigateRef.current = true
+    router.replace('/home')
+  }
+})
+```
+
+### 34. 게스트 모드 → 로그인 화면 이동 버튼
+**파일:** `src/app/home.tsx`, `src/lib/auth-context.tsx`, `src/app/_layout.tsx`
+
+- **문제:** 게스트 모드 설정 패널에 로그인 진입 경로 없음
+- **해결:** `AuthContext` 신규 생성 → `exitGuestMode()` 함수 노출
+- `_layout.tsx`에서 `AuthContext.Provider`로 `setGuestMode(false)` 주입
+- `home.tsx` 게스트 카드에 "로그인하러 가기" 버튼 추가 → 시트 닫고 로그인 화면 전환
+
+### 35. DEFAULT_CAT 품종 버그 수정
+**파일:** `src/lib/cats-context.tsx`
+
+- **문제:** `DEFAULT_CAT.breed = '코리안숏헤어'` → BREEDS 목록 미포함 → 수정 시 자동으로 '기타' 매핑
+- **해결:** `'코리안숏헤어'` → `'코리안숏헤어 (고등어)'` (BREEDS 목록 일치)
+
+### 36. GitHub Pages SPA 라우팅 404 수정
+**파일:** `package.json`
+
+- **문제:** `/catscare/home` 등 하위 경로 직접 접근 시 GitHub Pages 404 반환
+- **해결:** `predeploy` 스크립트로 `dist/404.html` 자동 생성 (index.html 복사)
+  - GitHub Pages는 없는 경로 → 404.html 서빙 → SPA가 클라이언트 라우팅으로 처리
+
+```json
+"predeploy": "node -e \"require('fs').copyFileSync('dist/index.html', 'dist/404.html')\""
+```
+
+### 37. 보안 검토
+- `supabaseAnonKey` (`sb_publishable_...`): 클라이언트 노출 의도된 공개 키, RLS로 보호 → **안전**
+- `service_role` 키: 코드 어디에도 없음 → **안전**
+- `hospital.tsx` OCR 호출: 런타임 생성 JWT 사용, AI API 키는 서버 환경변수에만 존재 → **안전**
+
+### 38. AI Edge Function 사전 설계
+**파일:** `supabase/functions/audio-summary/index.ts`, `supabase/functions/food-recommend/index.ts`
+
+API 키 등록 즉시 활성화 가능한 구조로 사전 구현.
+
+| 함수 | 기능 | 필요 키 |
+|---|---|---|
+| `audio-summary` | 진료 녹음 → Whisper 전사 → Claude 요약 | `OPENAI_API_KEY` + `ANTHROPIC_API_KEY` |
+| `food-recommend` | 식사 이력 분석 → 취향 패턴 + 추천 사료 | `ANTHROPIC_API_KEY` |
+
+**활성화 방법 (결제 후):**
+1. `supabase functions deploy audio-summary`
+2. `supabase functions deploy food-recommend`
+3. Supabase Dashboard → Edge Functions → Secrets에 API 키 등록
+
+### 39. 접종 백신 종류 확장
+**파일:** `src/app/hospital.tsx`
+
+기존 6종 → 11종으로 확장:
+
+| 추가 항목 | 설명 |
+|---|---|
+| 종합백신 3종 / 5종 구분 | FVRCP 단독 vs FeLV+FIV 포함 버전 분리 |
+| 고양이 면역결핍 (FIV) | 고양이 에이즈 바이러스 백신 |
+| 보르데텔라 | 호흡기 감염 예방 |
+| 심장사상충 예방 | 정기 투여 기록용 |
+| 외부기생충 예방 (벼룩·진드기) | 정기 투여 기록용 |
+
+---
+
 ## 남은 작업 (TODO)
 
 - [x] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장
 - [x] 체중 기록 DB 저장 + 그래프 실 데이터
 - [x] 투약 데이터 DB 저장
 - [x] Google 로그인 활성화
-- [x] 카카오 소셜 로그인 연동 → 개인 앱 한계로 제거
+- [x] 카카오 소셜 로그인 연동 (비즈앱 전환 후 활성화)
 - [x] 계정 설정 UI (연결 계정 확인 + 로그아웃)
 - [x] 혈액검사 항목 실제 검사지 기반 업데이트 (Vcheck C10)
 - [x] 혈액검사 OCR 자동 입력 (Supabase Edge Function + Anthropic Vision)
 - [x] 접종 기록 CRUD (추가 / 삭제 / Supabase 연동)
+- [x] 로그인 후 홈 탭 자동 이동
+- [x] 게스트 모드 → 로그인 화면 이동 버튼
+- [x] AI Edge Function 사전 설계 (녹음 요약 · 식단 추천)
 - [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
+- [ ] AI 기능 활성화 (OpenAI + Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] 소변 검사 기록 UI 구현
 - [ ] 푸시 알림 실제 발송 연동 (Expo Notifications)
 - [ ] 다크모드 지원

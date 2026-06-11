@@ -168,11 +168,16 @@ type Vaccination = {
 }
 
 const VACC_PRESETS = [
-  '종합백신 (FVRCP)',
+  '종합백신 3종 (FVRCP)',
+  '종합백신 5종 (FVRCP+FeLV+FIV)',
   '광견병 (Rabies)',
   '고양이 백혈병 (FeLV)',
+  '고양이 면역결핍 (FIV)',
   '고양이 복막염 (FIP)',
   '클라미디아',
+  '보르데텔라',
+  '심장사상충 예방',
+  '외부기생충 예방 (벼룩·진드기)',
   '직접 입력',
 ]
 
