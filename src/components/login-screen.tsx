@@ -42,7 +42,7 @@ export default function LoginScreen({ onGuest }: { onGuest?: () => void }) {
     setSignUpDone(false)
   }
 
-  const handleSocialSignIn = async (provider: 'google') => {
+  const handleSocialSignIn = async (provider: 'google' | 'kakao') => {
     setError('')
     setLoading(true)
     const redirectTo = Platform.OS === 'web'
@@ -139,6 +139,14 @@ export default function LoginScreen({ onGuest }: { onGuest?: () => void }) {
                 >
                   <Text style={styles.googleIcon}>G</Text>
                   <Text style={styles.socialBtnText}>Google로 계속하기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.socialBtn, styles.kakaoBtn, loading && styles.buttonDisabled]}
+                  onPress={() => handleSocialSignIn('kakao')}
+                  disabled={loading}
+                >
+                  <Text style={styles.kakaoIcon}>K</Text>
+                  <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -274,7 +282,9 @@ const styles = StyleSheet.create({
   },
   googleIcon: { fontSize: 16, fontWeight: '700', color: '#EA4335' },
   socialBtnText: { fontSize: 15, color: '#333', fontWeight: '500' },
-
+  kakaoBtn: { backgroundColor: '#FEE500', borderColor: '#FEE500' },
+  kakaoIcon: { fontSize: 16, fontWeight: '900', color: '#3C1E1E' },
+  kakaoBtnText: { fontSize: 15, color: '#3C1E1E', fontWeight: '600' },
   guestBtn: {
     alignItems: 'center',
     marginTop: 20,
