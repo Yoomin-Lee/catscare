@@ -540,12 +540,7 @@ export default function HospitalScreen() {
       {/* ── 접종 추가 ── */}
       <BottomSheet visible={panel === 'vacc-add'} onClose={() => setPanel(null)} title="접종 기록 추가">
         <Text style={st.fieldLabel}>백신 종류</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: 12 }}
-          contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingRight: 8 }}
-        >
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {VACC_PRESETS.map(p => (
             <TouchableOpacity key={p}
               style={[st.presetChip, vaccName === p && st.presetChipActive]}
@@ -553,7 +548,7 @@ export default function HospitalScreen() {
               <Text style={[st.presetChipText, vaccName === p && st.presetChipTextActive]}>{p}</Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
         {vaccName === '직접 입력' && (
           <TextInput
             style={[st.metricInput, { width: '100%', textAlign: 'left', marginBottom: 12, paddingHorizontal: 14, paddingVertical: 12 }]}
