@@ -584,6 +584,47 @@ API 키 등록 즉시 활성화 가능한 구조로 사전 구현.
 
 ---
 
+## 2026-06-12 (Day 7) — Gemini AI 연동 완성
+
+### 42. Gemini API 서버 사이드 연동 (보안 이슈 해결)
+**파일:** `src/lib/gemini.ts`, `supabase/functions/gemini/index.ts`
+
+**문제 발견 및 해결 과정:**
+- 최초 시도: `EXPO_PUBLIC_GEMINI_API_KEY`를 `.env`에 저장 → `npm run deploy` 시 GitHub Push Protection이 차단
+  - **원인:** `EXPO_PUBLIC_` 접두사는 빌드 시 API 키를 JS 번들에 그대로 포함시킴 → 공개 저장소에 키 노출
+- **해결:** Supabase Edge Function으로 Gemini 호출 이전 → 키는 서버(Supabase Secrets)에만 보관
+
+**Supabase Edge Function (`supabase/functions/gemini/index.ts`):**
+- 단일 함수로 3가지 액션 처리:
+  - `chat`: 일반 텍스트 프롬프트
+  - `summarize-recording`: 오디오 base64 → 진료 내용 요약
+  - `analyze-food`: 고양이 정보 + 기호성 기록 → 취향 분석 및 추천
+- 외부 SDK 없이 순수 `fetch`로 Gemini REST API 직접 호출
+  - 엔드포인트: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
+- CORS 헤더 설정 (웹 앱 호출 허용)
+- `GEMINI_API_KEY` 환경 변수 → Supabase Dashboard > Edge Functions > Secrets에 등록
+
+**`src/lib/gemini.ts` 리팩토링:**
+- `@google/generative-ai` SDK 직접 호출 → Supabase Edge Function HTTP 호출로 교체
+- 로그인 유저: Supabase JWT 토큰을 Authorization 헤더에 첨부
+- 게스트 유저: `EXPO_PUBLIC_SUPABASE_ANON_KEY` 폴백 사용 (401 오류 해결)
+
+### 43. 병원·식단 탭 크래시 버그 수정
+**파일:** `src/lib/gemini.ts`
+
+- **문제:** `gemini.ts` 모듈 최상단에서 API 키 없으면 즉시 `throw` → import 시점에 탭 전체 크래시
+- **해결:** 모듈 레벨 `throw` 제거 → 각 함수 호출 시점에 키 검증으로 변경
+- 이전 구조: `const model = new GoogleGenerativeAI(apiKey)` (모듈 로드 시 실행)
+- 이후 구조: `function getModel() { ... }` (호출 시 실행) → 최종적으로 Edge Function 방식으로 대체
+
+### 44. Gemini Edge Function 배포 및 검증
+- `npx supabase functions deploy gemini --project-ref kbjxjogmnwurxbxnpfsz --use-api` 배포 완료
+- Playwright 자동화 테스트로 실제 동작 검증:
+  - 식단 탭 → "맞춤 추천 더 보기" 클릭 → Gemini 200 응답 수신 확인
+  - AI 취향 분석 결과 바텀시트 정상 표시 확인
+
+---
+
 ## 남은 작업 (TODO)
 
 - [x] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장
@@ -600,8 +641,8 @@ API 키 등록 즉시 활성화 가능한 구조로 사전 구현.
 - [x] AI Edge Function 사전 설계 (녹음 요약 · 식단 추천)
 - [x] 접종 백신 칩 가로 스크롤 → 줄바꿈 (웹 마우스 지원)
 - [x] 홈 탭 "다가오는 일정" 고양이별 동적 연동 (ScheduleContext)
+- [x] Gemini AI 연동 (식단 추천 · 진료 녹음 요약) — Edge Function 서버사이드 처리
 - [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
-- [ ] AI 기능 활성화 (OpenAI + Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] 소변 검사 기록 UI 구현
 - [ ] 푸시 알림 실제 발송 연동 (Expo Notifications)
 - [ ] 다크모드 지원

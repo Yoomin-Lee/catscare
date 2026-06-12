@@ -1,7 +1,8 @@
-import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
 import { useState } from 'react'
+import { analyzeFoodPreference } from '@/lib/gemini'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import { useCats, catAvatarColor } from '@/lib/cats-context'
@@ -32,6 +33,32 @@ export default function FoodScreen() {
   const { selectedCat } = useCats()
   const [addPanel, setAddPanel] = useState(false)
   const [selectedPref, setSelectedPref] = useState<string | null>(null)
+  const [aiRec, setAiRec] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiPanel, setAiPanel] = useState(false)
+
+  const loadAiRecommendation = async () => {
+    setAiLoading(true)
+    setAiPanel(true)
+    try {
+      const result = await analyzeFoodPreference(
+        {
+          name: selectedCat.name,
+          breed: selectedCat.breed,
+          ageYears: selectedCat.ageYears,
+          weightKg: selectedCat.weightKg,
+          gender: selectedCat.gender,
+          neutered: selectedCat.neutered,
+        },
+        FOODS.map(f => ({ name: f.name, type: f.type, pref: f.pref }))
+      )
+      setAiRec(result)
+    } catch {
+      setAiRec('AI 추천을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -62,9 +89,11 @@ export default function FoodScreen() {
             {' '}닭고기 파우치는 2번 연속 거부 → 구매 비추천.
             {' '}3살 중성화 암컷 기준 체중 유지형 사료가 적합해요.
           </Text>
-          <TouchableOpacity style={styles.recBtn}>
-            <Feather name="star" size={12} color="#993C1D" />
-            <Text style={styles.recBtnText}>맞춤 추천 더 보기</Text>
+          <TouchableOpacity style={styles.recBtn} onPress={loadAiRecommendation} disabled={aiLoading}>
+            {aiLoading
+              ? <ActivityIndicator size="small" color="#993C1D" />
+              : <Feather name="star" size={12} color="#993C1D" />}
+            <Text style={styles.recBtnText}>{aiLoading ? 'AI 분석 중...' : '맞춤 추천 더 보기'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -88,6 +117,15 @@ export default function FoodScreen() {
         </TouchableOpacity>
 
       </ScrollView>
+
+      <BottomSheet visible={aiPanel} onClose={() => setAiPanel(false)} title="AI 취향 분석 추천">
+        {aiLoading
+          ? <ActivityIndicator size="large" color="#E9785A" style={{ paddingVertical: 40 }} />
+          : <ScrollView style={{ maxHeight: 400 }}><Text style={styles.aiResultText}>{aiRec}</Text></ScrollView>}
+        <TouchableOpacity style={[styles.primaryBtn, { marginTop: 16 }]} onPress={() => setAiPanel(false)}>
+          <Text style={styles.primaryBtnText}>확인</Text>
+        </TouchableOpacity>
+      </BottomSheet>
 
       <BottomSheet visible={addPanel} onClose={() => setAddPanel(false)} title="식사 기록 추가">
         <View style={styles.formGroup}>
@@ -168,6 +206,7 @@ const styles = StyleSheet.create({
   prefText_ok: { color: '#BA7517' },
   pref_no: { backgroundColor: '#F1EFE8' },
   prefText_no: { color: '#666' },
+  aiResultText: { fontSize: 14, color: '#1a1a1a', lineHeight: 22 },
   primaryBtn: { backgroundColor: '#E9785A', borderRadius: 12, padding: 14, alignItems: 'center' },
   primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   formGroup: { marginBottom: 16 },

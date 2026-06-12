@@ -1,7 +1,8 @@
-import { Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native'
+import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { summarizeVetRecording } from '@/lib/gemini'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import BottomSheet from '@/components/bottom-sheet'
@@ -181,7 +182,7 @@ const VACC_PRESETS = [
   '직접 입력',
 ]
 
-type PanelType = 'blood' | 'blood-chart' | 'blood-add' | 'urine' | 'vacc-add' | null
+type PanelType = 'blood' | 'blood-chart' | 'blood-add' | 'urine' | 'vacc-add' | 'ai-summary' | null
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function HospitalScreen() {
@@ -200,6 +201,13 @@ export default function HospitalScreen() {
   const [showOcrSheet, setShowOcrSheet] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrError, setOcrError] = useState('')
+
+  // ai recording
+  const [isRecording, setIsRecording] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiSummary, setAiSummary] = useState('')
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
 
   // vaccinations
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([])
@@ -244,6 +252,49 @@ export default function HospitalScreen() {
         })))
       })
   }, [selectedCat.id, userId])
+
+  const startRecording = async () => {
+    if (!('MediaRecorder' in window)) {
+      Alert.alert('이 기기에서는 지원되지 않습니다.')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        setAiLoading(true)
+        try {
+          const reader = new FileReader()
+          const base64 = await new Promise<string>((res, rej) => {
+            reader.onload = () => res((reader.result as string).split(',')[1])
+            reader.onerror = rej
+            reader.readAsDataURL(blob)
+          })
+          const summary = await summarizeVetRecording(base64, blob.type || 'audio/webm')
+          setAiSummary(summary)
+          setPanel('ai-summary')
+        } catch {
+          Alert.alert('AI 요약 실패', '다시 시도해주세요.')
+        } finally {
+          setAiLoading(false)
+        }
+      }
+      recorder.start()
+      setIsRecording(true)
+    } catch {
+      Alert.alert('마이크 권한이 필요합니다.', '브라우저에서 마이크 접근을 허용해주세요.')
+    }
+  }
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop()
+    setIsRecording(false)
+  }
 
   const openAdd = () => {
     setAddDate(new Date()); setShowDatePicker(false); setAddMetrics({}); setOcrError(''); setPanel('blood-add')
@@ -361,8 +412,26 @@ export default function HospitalScreen() {
           </View>
           <Text style={st.aiBody}>수의사 동의 후 진료 중 녹음하면 진료 내용을 자동으로 텍스트로 변환하고 핵심 내용을 요약해 기록합니다.</Text>
           <View style={st.aiActions}>
-            <TouchableOpacity style={st.outlineBtn}><Feather name="mic" size={13} color="#534AB7" /><Text style={st.outlineBtnText}>녹음 시작</Text></TouchableOpacity>
-            <TouchableOpacity style={st.outlineBtn}><Feather name="file-text" size={13} color="#534AB7" /><Text style={st.outlineBtnText}>지난 요약 보기</Text></TouchableOpacity>
+            <TouchableOpacity
+              style={[st.outlineBtn, isRecording && st.outlineBtnRec]}
+              onPress={isRecording ? stopRecording : startRecording}
+              disabled={aiLoading}
+            >
+              {aiLoading
+                ? <ActivityIndicator size="small" color="#534AB7" />
+                : <Feather name={isRecording ? 'square' : 'mic'} size={13} color={isRecording ? '#D94040' : '#534AB7'} />}
+              <Text style={[st.outlineBtnText, isRecording && { color: '#D94040' }]}>
+                {aiLoading ? 'AI 분석 중...' : isRecording ? '녹음 중지' : '녹음 시작'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[st.outlineBtn, !aiSummary && { opacity: 0.4 }]}
+              onPress={() => aiSummary && setPanel('ai-summary')}
+              disabled={!aiSummary}
+            >
+              <Feather name="file-text" size={13} color="#534AB7" />
+              <Text style={st.outlineBtnText}>요약 보기</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -600,6 +669,16 @@ export default function HospitalScreen() {
         </TouchableOpacity>
       </BottomSheet>
 
+      {/* ── AI 진료 요약 ── */}
+      <BottomSheet visible={panel === 'ai-summary'} onClose={() => setPanel(null)} title="AI 진료 요약">
+        <ScrollView style={{ maxHeight: 400 }}>
+          <Text style={st.aiSummaryText}>{aiSummary}</Text>
+        </ScrollView>
+        <TouchableOpacity style={[st.saveBtn, { marginTop: 16 }]} onPress={() => setPanel(null)}>
+          <Text style={st.saveBtnText}>확인</Text>
+        </TouchableOpacity>
+      </BottomSheet>
+
       {/* ── OCR 소스 선택 시트 ── */}
       <Modal transparent visible={showOcrSheet} animationType="slide" onRequestClose={() => setShowOcrSheet(false)}>
         <TouchableOpacity style={st.sheetOverlay} activeOpacity={1} onPress={() => setShowOcrSheet(false)}>
@@ -652,7 +731,9 @@ const st = StyleSheet.create({
   aiBody: { fontSize: 13, color: '#534AB7', lineHeight: 20 },
   aiActions: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' },
   outlineBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 0.5, borderColor: '#534AB7', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7 },
+  outlineBtnRec: { borderColor: '#D94040', backgroundColor: '#FEF0EC' },
   outlineBtnText: { fontSize: 12, color: '#534AB7', fontWeight: '500' },
+  aiSummaryText: { fontSize: 14, color: '#1a1a1a', lineHeight: 22 },
   examCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 0.5, borderColor: '#EBEBEB' },
   examIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   examBody: { flex: 1 },

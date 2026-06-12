@@ -2,7 +2,7 @@ import { Image, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacit
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
 import * as ImagePicker from 'expo-image-picker'
-import { useState, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import { useCats, catAvatarColor, type Cat } from '@/lib/cats-context'
@@ -110,6 +110,12 @@ export default function HomeScreen() {
   const [birthM, setBirthM] = useState('')
   const [birthD, setBirthD] = useState('')
   const [weightText, setWeightText] = useState('')
+  const formRef = useRef(form)
+  const sheetModeRef = useRef(sheetMode)
+  const editIdRef = useRef(editId)
+  formRef.current = form
+  sheetModeRef.current = sheetMode
+  editIdRef.current = editId
 
   const setBirthPart = (part: 'y' | 'm' | 'd', val: string) => {
     const next = { y: birthY, m: birthM, d: birthD, [part]: val }
@@ -143,9 +149,12 @@ export default function HomeScreen() {
     setShowBreedList(false)
   }
   const save = () => {
-    if (!form.name.trim()) return
-    if (sheetMode === 'edit' && editId) updateCat(editId, form)
-    else addCat(form)
+    const f = formRef.current
+    const mode = sheetModeRef.current
+    const eid = editIdRef.current
+    if (!f.name.trim()) return
+    if (mode === 'edit' && eid) updateCat(eid, f)
+    else addCat(f)
     setSheetMode(null)
   }
   const pickPhoto = async () => {
