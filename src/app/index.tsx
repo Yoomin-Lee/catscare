@@ -1,12 +1,13 @@
 import { Image, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import MedicationSection from '@/components/medication-section'
 import { useCats, catAvatarColor } from '@/lib/cats-context'
-import { useSchedule } from '@/lib/schedule-context'
+import { useSchedule, type NotifyEntry } from '@/lib/schedule-context'
+import { subscribePush, unsubscribePush, isPushSubscribed, isPushSupported, getPushPermission } from '@/lib/push'
 
 function addMonths(date: Date, months: number) {
   const d = new Date(date); d.setMonth(d.getMonth() + months); return d
@@ -145,22 +146,46 @@ function getBadgeStyle(days: number) {
 }
 
 export default function AlarmScreen() {
-  const { selectedCat } = useCats()
+  const { selectedCat, userId } = useCats()
   const { getSchedule, updateSchedule } = useSchedule()
   const schedule = getSchedule(selectedCat.id)
   const hospitalLastDate = schedule.hospitalLastDate
   const hospitalCycle = schedule.hospitalCycle
   const sandLastDate = schedule.sandLastDate
   const sandCycle = schedule.sandCycle
+  const alarmsEnabled = schedule.alarmsEnabled
+  const hospitalNotify = schedule.hospitalNotify
+  const sandNotify = schedule.sandNotify
+
   const setHospitalLastDate = (d: Date) => updateSchedule(selectedCat.id, { hospitalLastDate: d })
   const setHospitalCycle = (v: number) => updateSchedule(selectedCat.id, { hospitalCycle: v })
   const setSandCycle = (fn: ((v: number) => number) | number) => {
     const next = typeof fn === 'function' ? fn(sandCycle) : fn
     updateSchedule(selectedCat.id, { sandCycle: next })
   }
+  const toggle = (key: 'hospital' | 'sand') =>
+    updateSchedule(selectedCat.id, { alarmsEnabled: { ...alarmsEnabled, [key]: !alarmsEnabled[key] } })
+  const setHospitalNotify = (fn: ((p: NotifyEntry[]) => NotifyEntry[]) | NotifyEntry[]) => {
+    const next = typeof fn === 'function' ? fn(hospitalNotify) : fn
+    updateSchedule(selectedCat.id, { hospitalNotify: next })
+  }
+  const setSandNotify = (fn: ((p: NotifyEntry[]) => NotifyEntry[]) | NotifyEntry[]) => {
+    const next = typeof fn === 'function' ? fn(sandNotify) : fn
+    updateSchedule(selectedCat.id, { sandNotify: next })
+  }
+
   const [showHospitalPicker, setShowHospitalPicker] = useState(false)
   const [sandHistory, setSandHistory] = useState<Date[]>([])
   const [showSandPicker, setShowSandPicker] = useState(false)
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushSupported, setPushSupported] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+  const [openDrop, setOpenDrop] = useState<string | null>(null)
+
+  useEffect(() => {
+    isPushSupported().then(setPushSupported)
+    isPushSubscribed().then(setPushSubscribed)
+  }, [])
 
   const recordSand = (date: Date) => {
     updateSchedule(selectedCat.id, { sandLastDate: date })
@@ -171,17 +196,19 @@ export default function AlarmScreen() {
     })
     setShowSandPicker(false)
   }
-  const [alarms, setAlarms] = useState({ hospital: true, sand: true, medication: false })
-  const toggle = (key: keyof typeof alarms) => setAlarms(p => ({ ...p, [key]: !p[key] }))
-  const [sandNotify, setSandNotify] = useState<NotifyEntry[]>([
-    { id: '1', days: 3, time: '09:00' },
-    { id: '2', days: 0, time: '09:00' },
-  ])
-  const [hospitalNotify, setHospitalNotify] = useState<NotifyEntry[]>([
-    { id: 'h1', days: 7, time: '09:00' },
-    { id: 'h2', days: 1, time: '09:00' },
-  ])
-  const [openDrop, setOpenDrop] = useState<string | null>(null)
+
+  const togglePush = async () => {
+    if (!userId) return
+    setPushLoading(true)
+    if (pushSubscribed) {
+      await unsubscribePush(userId)
+      setPushSubscribed(false)
+    } else {
+      const ok = await subscribePush(userId)
+      setPushSubscribed(ok)
+    }
+    setPushLoading(false)
+  }
 
   const notifyLabel = (entries: NotifyEntry[]) => {
     if (entries.length === 0) return '없음'
@@ -267,19 +294,36 @@ export default function AlarmScreen() {
 
         <Text style={[styles.sectionTitle, { marginTop: 8 }]}>알람 설정</Text>
         <View style={styles.settingsCard}>
-          {[
+          {([
             { key: 'hospital' as const, label: '병원 방문 알림', sub: `방문 ${notifyLabel(hospitalNotify)}` },
             { key: 'sand' as const, label: '화장실 모래 교체 알림', sub: `교체 ${notifyLabel(sandNotify)}` },
-          ].map((item, i, arr) => (
-            <View key={item.key} style={[styles.toggleRow, i < arr.length - 1 && styles.toggleBorder]}>
+          ] as const).map((item, i) => (
+            <View key={item.key} style={[styles.toggleRow, styles.toggleBorder]}>
               <View style={styles.toggleInfo}>
                 <Text style={styles.toggleLabel}>{item.label}</Text>
                 <Text style={styles.toggleSub}>{item.sub}</Text>
               </View>
-              <Switch value={alarms[item.key]} onValueChange={() => toggle(item.key)}
+              <Switch value={alarmsEnabled[item.key]} onValueChange={() => toggle(item.key)}
                 trackColor={{ false: '#ddd', true: '#1D9E75' }} thumbColor="#fff" />
             </View>
           ))}
+          {pushSupported && (
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleInfo}>
+                <Text style={styles.toggleLabel}>기기 알림 수신</Text>
+                <Text style={styles.toggleSub}>
+                  {!userId ? '로그인 후 사용 가능' : pushSubscribed ? '활성화됨' : '탭하여 알림 허용'}
+                </Text>
+              </View>
+              <Switch
+                value={pushSubscribed}
+                onValueChange={togglePush}
+                disabled={pushLoading || !userId}
+                trackColor={{ false: '#ddd', true: '#1D9E75' }}
+                thumbColor="#fff"
+              />
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -317,15 +361,15 @@ export default function AlarmScreen() {
         <View style={[styles.toggleRow, { marginTop: 8 }]}>
           <View style={styles.toggleInfo}>
             <Text style={styles.toggleLabel}>방문 알림</Text>
-            {alarms.hospital
+            {alarmsEnabled.hospital
               ? <Text style={styles.toggleSub}>{notifyLabel(hospitalNotify)}</Text>
               : <Text style={styles.toggleSub}>꺼짐</Text>
             }
           </View>
-          <Switch value={alarms.hospital} onValueChange={() => toggle('hospital')}
+          <Switch value={alarmsEnabled.hospital} onValueChange={() => toggle('hospital')}
             trackColor={{ false: '#ddd', true: '#1D9E75' }} thumbColor="#fff" />
         </View>
-        {alarms.hospital && (
+        {alarmsEnabled.hospital && (
           <View style={styles.notifySection}>
             <Text style={styles.notifySectionLabel}>알림 시기</Text>
             {hospitalNotify.map(entry => {
@@ -449,15 +493,15 @@ export default function AlarmScreen() {
         <View style={[styles.toggleRow, { marginTop: 16 }]}>
           <View style={styles.toggleInfo}>
             <Text style={styles.toggleLabel}>교체 알림</Text>
-            {alarms.sand
+            {alarmsEnabled.sand
               ? <Text style={styles.toggleSub}>{notifyLabel(sandNotify)}</Text>
               : <Text style={styles.toggleSub}>꺼짐</Text>
             }
           </View>
-          <Switch value={alarms.sand} onValueChange={() => toggle('sand')}
+          <Switch value={alarmsEnabled.sand} onValueChange={() => toggle('sand')}
             trackColor={{ false: '#ddd', true: '#1D9E75' }} thumbColor="#fff" />
         </View>
-        {alarms.sand && (
+        {alarmsEnabled.sand && (
           <View style={styles.notifySection}>
             <Text style={styles.notifySectionLabel}>알림 시기</Text>
             {sandNotify.map(entry => {

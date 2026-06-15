@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { CatsProvider } from '@/lib/cats-context'
 import { AuthContext } from '@/lib/auth-context'
 import { ScheduleProvider } from '@/lib/schedule-context'
+import { registerServiceWorker } from '@/lib/push'
 import { AnimatedSplashOverlay } from '@/components/animated-icon'
 import AppTabs from '@/components/app-tabs'
 import LoginScreen from '@/components/login-screen'
@@ -20,6 +21,7 @@ export default function RootLayout() {
   const didNavigateRef = useRef(false)
 
   useEffect(() => {
+    registerServiceWorker()
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session && !didNavigateRef.current) {
@@ -61,6 +63,10 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Head>
         <link rel="icon" href="/catscare/favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/catscare/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="CatsCare" />
         <title>CatsCare</title>
       </Head>
       {Platform.OS === 'web' ? (

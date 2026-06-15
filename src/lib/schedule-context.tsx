@@ -1,11 +1,16 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 
+export type NotifyEntry = { id: string; days: number; time: string }
+
 export type CatSchedule = {
   hospitalLastDate: Date
   hospitalCycle: number  // months
   sandLastDate: Date
   sandCycle: number      // weeks
+  alarmsEnabled: { hospital: boolean; sand: boolean }
+  hospitalNotify: NotifyEntry[]
+  sandNotify: NotifyEntry[]
 }
 
 function defaultSchedule(): CatSchedule {
@@ -17,6 +22,15 @@ function defaultSchedule(): CatSchedule {
     hospitalCycle: 6,
     sandLastDate: today,
     sandCycle: 4,
+    alarmsEnabled: { hospital: true, sand: true },
+    hospitalNotify: [
+      { id: 'h1', days: 7, time: '09:00' },
+      { id: 'h2', days: 1, time: '09:00' },
+    ],
+    sandNotify: [
+      { id: 's1', days: 3, time: '09:00' },
+      { id: 's2', days: 0, time: '09:00' },
+    ],
   }
 }
 
@@ -50,17 +64,21 @@ export function ScheduleProvider({ userId, children }: { userId?: string; childr
     if (!userId) { setSchedules({}); return }
     supabase
       .from('schedules')
-      .select('cat_id, hospital_last_date, hospital_cycle, sand_last_date, sand_cycle')
+      .select('cat_id, hospital_last_date, hospital_cycle, sand_last_date, sand_cycle, alarms_enabled, hospital_notify, sand_notify')
       .eq('user_id', userId)
       .then(({ data }) => {
         if (!data) return
         const map: Record<string, CatSchedule> = {}
+        const def = defaultSchedule()
         data.forEach(r => {
           map[r.cat_id as string] = {
             hospitalLastDate: fromDateStr(r.hospital_last_date as string),
             hospitalCycle: r.hospital_cycle as number,
             sandLastDate: fromDateStr(r.sand_last_date as string),
             sandCycle: r.sand_cycle as number,
+            alarmsEnabled: (r.alarms_enabled as CatSchedule['alarmsEnabled']) ?? def.alarmsEnabled,
+            hospitalNotify: (r.hospital_notify as NotifyEntry[]) ?? def.hospitalNotify,
+            sandNotify: (r.sand_notify as NotifyEntry[]) ?? def.sandNotify,
           }
         })
         setSchedules(map)
@@ -84,6 +102,9 @@ export function ScheduleProvider({ userId, children }: { userId?: string; childr
         hospital_cycle: next.hospitalCycle,
         sand_last_date: toDateStr(next.sandLastDate),
         sand_cycle: next.sandCycle,
+        alarms_enabled: next.alarmsEnabled,
+        hospital_notify: next.hospitalNotify,
+        sand_notify: next.sandNotify,
       },
       { onConflict: 'cat_id' }
     )
