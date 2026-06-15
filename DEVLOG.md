@@ -846,6 +846,54 @@ select cron.schedule('alarm-check-every-30min', '*/30 * * * *', ...);
 
 ---
 
+## 2026-06-16 (Day 10) — Edge Function 배포 + iOS PWA 탭바 safe area 수정
+
+### 작업 내용
+
+#### 1. Supabase Edge Function 배포 완료
+Day 9까지 로컬에만 있던 Edge Function 2개를 Supabase 서버에 배포했다.
+
+**배포 과정:**
+- `supabase login`이 비-TTY 환경에서 불가 → `SUPABASE_ACCESS_TOKEN` 환경변수 방식으로 우회
+- PowerShell 터미널에서 직접 실행:
+  ```powershell
+  $env:SUPABASE_ACCESS_TOKEN="<token>"
+  npx supabase functions deploy push-notify --project-ref kbjxjogmnwurxbxnpfsz --use-api
+  npx supabase functions deploy alarm-check --project-ref kbjxjogmnwurxbxnpfsz --use-api
+  ```
+- Supabase 대시보드 → Edge Functions → push-notify → Secrets에 VAPID 키 등록:
+  - `VAPID_PUBLIC_KEY`
+  - `VAPID_PRIVATE_KEY`
+
+#### 2. iOS PWA 탭바 safe area 수정
+
+**문제:** iPhone 16 홈 화면에 추가된 PWA에서 하단 탭바 아이콘/라벨이 홈 인디케이터에 가려짐
+
+**원인 분석:**
+- 탭바 `paddingBottom: 8` 고정값 — 홈 인디케이터(약 34px) 미반영
+- `viewport-fit=cover` 미설정으로 `env(safe-area-inset-bottom)` 값이 0으로 노출됨
+
+**적용한 수정:**
+- `_layout.tsx` Head에 `viewport-fit=cover` 메타 뷰포트 추가
+- `app-tabs.web.tsx` 탭바에 `useSafeAreaInsets().bottom` 동적 적용
+  ```tsx
+  const insets = useSafeAreaInsets()
+  <View style={[styles.tabBar, { paddingBottom: Math.max(8, insets.bottom) }]}>
+  ```
+
+**시행착오:**
+- `paddingBottom: 'env(safe-area-inset-bottom, 8px)' as any` → RN Web 런타임 크래시
+- `data-tab-bar` CSS 인젝션 방식 → 패딩 과도하게 적용되어 더 잘림
+- 최종: `useSafeAreaInsets()` + `viewport-fit=cover` 조합 (PWA 재설치 필요)
+
+### 기술 메모
+
+- **Supabase anon key 노출 문제 아님**: OAuth 리다이렉트 흐름에서 Supabase URL이 주소창에 잠깐 보이는 것은 정상 동작. anon key는 RLS로 보호되므로 공개되어도 무방.
+- **iOS Safari에서는 푸시 알림 불가**: iOS 16.4 이상 + 홈 화면 추가(standalone PWA) 상태에서만 Web Push 지원. 일반 Safari 탭 불가.
+- **PWA 캐시 주의**: safe area 수정 적용 후 반드시 홈 화면에서 앱 삭제 → 재추가 필요.
+
+---
+
 ## 남은 작업 (TODO)
 
 - [x] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장
@@ -875,8 +923,10 @@ select cron.schedule('alarm-check-every-30min', '*/30 * * * *', ...);
 - [x] push-notify Edge Function 구현 (VAPID 서명 Web Push 발송)
 - [x] alarm-check Edge Function 구현 (스케줄 기반 알람 체크)
 - [x] pg_cron 스케줄 등록 (30분 주기 alarm-check)
-- [ ] push-notify / alarm-check Edge Function 배포 (Supabase CLI 로그인 후 진행)
-- [ ] VAPID Secrets 등록 (push-notify Edge Function)
+- [x] push-notify / alarm-check Edge Function 배포
+- [x] VAPID Secrets 등록 (push-notify Edge Function)
+- [ ] iOS PWA 탭바 safe area 완전 해결 (useSafeAreaInsets 정상 동작 확인 필요)
+- [ ] 웹 푸시 알림 실 수신 테스트 (iPhone 16 홈 화면 앱)
 - [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] 소변 검사 기록 UI 구현
 - [ ] 다크모드 지원

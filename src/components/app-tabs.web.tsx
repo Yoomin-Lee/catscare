@@ -2,6 +2,7 @@ import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps } from 'expo-ro
 import Feather from '@expo/vector-icons/Feather';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type TabConfig = {
   name: string;
@@ -21,6 +22,7 @@ const TABS: TabConfig[] = [
 ];
 
 export default function AppTabs() {
+  const insets = useSafeAreaInsets()
   return (
     <Tabs style={styles.container}>
       <View style={styles.header}>
@@ -35,7 +37,7 @@ export default function AppTabs() {
       </View>
       <TabSlot style={styles.slot} />
       <TabList asChild>
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, { paddingBottom: Math.max(8, insets.bottom) }]}>
           {TABS.map(tab => (
             <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
               <TabButton tab={tab}>{tab.label}</TabButton>
