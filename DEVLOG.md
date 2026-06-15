@@ -754,6 +754,98 @@ API 키 등록 즉시 활성화 가능한 구조로 사전 구현.
 
 ---
 
+## 2026-06-15 (Day 9) — 푸시 알림 + PWA 홈화면 아이콘
+
+### 53. PWA 홈화면 아이콘 개선
+**파일:** `public/apple-touch-icon.png`, `src/app/_layout.tsx`
+
+- `sharp`로 `favicon-cat.png` → 180×180 리사이즈 → `public/apple-touch-icon.png` 생성
+- `_layout.tsx` Head에 메타 태그 추가:
+  ```html
+  <link rel="apple-touch-icon" href="/catscare/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="CatsCare" />
+  ```
+- iOS Safari에서 "홈 화면에 추가" 시 고양이 사진 아이콘 표시
+
+---
+
+### 54. 웹 푸시 알림 (Web Push API)
+**파일:** `public/sw.js`, `src/lib/push.ts`, `src/app/_layout.tsx`, `src/app/index.tsx`
+
+**아키텍처:**
+```
+앱 (알림 권한 요청) → 브라우저 Push 구독 → push_subscriptions DB 저장
+pg_cron (30분 주기) → alarm-check Edge Function → push-notify Edge Function → 기기 알림
+```
+
+**VAPID 키 생성:**
+```bash
+npx web-push generate-vapid-keys
+# Public:  BF3WQEClvA9QrL...
+# Private: 51NR81nw_207E4...
+```
+
+**`public/sw.js`** (Service Worker):
+- `push` 이벤트 수신 → `showNotification()` 호출
+- `notificationclick` 이벤트 → `/catscare/` 오픈
+
+**`src/lib/push.ts`**:
+- `registerServiceWorker()` — `/catscare/sw.js` 등록
+- `subscribePush(userId)` — 권한 요청 + PushManager.subscribe() + DB UPSERT
+- `unsubscribePush(userId)` — 구독 해제 + DB DELETE
+- `isPushSubscribed()` — 현재 구독 상태 조회
+
+**`schedule-context.tsx` 업데이트:**
+- `CatSchedule` 타입에 `alarmsEnabled`, `hospitalNotify`, `sandNotify` 추가
+- DB UPSERT에 3개 컬럼 포함 (`alarms_enabled JSONB`, `hospital_notify JSONB`, `sand_notify JSONB`)
+
+**`index.tsx` 업데이트:**
+- 알람 설정 로컬 state 제거 → schedule-context에서 파생
+- `toggle()`, `setHospitalNotify()`, `setSandNotify()` → `updateSchedule()` 호출
+- 알람 설정 카드에 **기기 알림 수신** 토글 추가
+
+**`supabase/functions/push-notify/index.ts`** (Edge Function):
+- `{ userId, title, body }` 입력
+- `push_subscriptions` 테이블에서 구독 조회
+- `npm:web-push`로 VAPID 서명 후 Web Push 발송
+- 410 응답(만료된 구독) → 자동 삭제
+
+**`supabase/functions/alarm-check/index.ts`** (Edge Function):
+- pg_cron에 의해 30분마다 호출
+- `schedules` 테이블 전체 조회
+- 각 유저의 다음 병원 방문일 / 모래 교체일 계산
+- 알림 시기 매칭 시 push-notify 호출
+
+**DB 추가 항목:**
+```sql
+-- schedules 테이블 컬럼 추가
+ALTER TABLE public.schedules
+  ADD COLUMN alarms_enabled JSONB DEFAULT '{"hospital":true,"sand":true}',
+  ADD COLUMN hospital_notify JSONB DEFAULT '[...]',
+  ADD COLUMN sand_notify JSONB DEFAULT '[...]';
+
+-- push_subscriptions 테이블
+CREATE TABLE public.push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id),
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- pg_cron 스케줄
+select cron.schedule('alarm-check-every-30min', '*/30 * * * *', ...);
+```
+
+**배포 잔여 작업:**
+- push-notify / alarm-check Edge Function 배포 (`supabase functions deploy`)
+- push-notify Secrets에 `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` 등록
+
+---
+
 ## 남은 작업 (TODO)
 
 - [x] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장
@@ -775,9 +867,16 @@ API 키 등록 즉시 활성화 가능한 구조로 사전 구현.
 - [x] 식단/기호성 탭 food_records DB 연동
 - [x] 홈 탭 전체 실 데이터 연동 (체중·투약·식사·접종)
 - [x] 로그인 후 데이터 사라짐 버그 수정 (stale closure + GRANT 누락)
-- [ ] schedule-context DB 연동 (현재 인메모리 → 새로고침 시 초기화)
+- [x] schedule-context DB 연동 (주기 알람 탭 영속화)
+- [x] 알림 설정 DB 연동 (alarmsEnabled, hospitalNotify, sandNotify)
+- [x] PWA 홈화면 아이콘 개선 (apple-touch-icon 180x180)
+- [x] 웹 푸시 알림 구현 (Service Worker + Web Push API)
+- [x] push_subscriptions 테이블 생성
+- [x] push-notify Edge Function 구현 (VAPID 서명 Web Push 발송)
+- [x] alarm-check Edge Function 구현 (스케줄 기반 알람 체크)
+- [x] pg_cron 스케줄 등록 (30분 주기 alarm-check)
+- [ ] push-notify / alarm-check Edge Function 배포 (Supabase CLI 로그인 후 진행)
+- [ ] VAPID Secrets 등록 (push-notify Edge Function)
 - [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] 소변 검사 기록 UI 구현
-- [ ] 푸시 알림 실제 발송 연동 (Expo Notifications)
 - [ ] 다크모드 지원
-- [ ] 모바일 앱 빌드 (iOS / Android)
