@@ -48,7 +48,7 @@ export default function RootLayout() {
 
   const content = (
     <AuthContext.Provider value={{ exitGuestMode: () => setGuestMode(false) }}>
-      <ScheduleProvider>
+      <ScheduleProvider userId={session?.user.id}>
         <CatsProvider userId={session?.user.id}>
           <AnimatedSplashOverlay />
           {(__DEV__ || session || guestMode) ? <AppTabs /> : <LoginScreen onGuest={() => setGuestMode(true)} />}
