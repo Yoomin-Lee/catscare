@@ -1,46 +1,138 @@
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { analyzeFoodPreference } from '@/lib/gemini'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import { useCats, catAvatarColor } from '@/lib/cats-context'
+import { supabase } from '@/lib/supabase'
 
-const FOODS = [
-  { name: '고메 참치+새우 파우치', type: '습식', date: '2025.11.18', dots: 3, pref: '환장함', prefStyle: 'love' as const },
-  { name: 'RC 헤어볼케어 건식', type: '건식', date: '2025.11.10', dots: 2, pref: '먹다가 맘', prefStyle: 'ok' as const },
-  { name: '쉬바 닭+연어 캔', type: '습식', date: '2025.11.05', dots: 4, pref: '아주 좋아함', prefStyle: 'love' as const },
-  { name: '퓨리나 닭고기 파우치', type: '습식', date: '2025.10.28', dots: 0, pref: '입도 안 댐', prefStyle: 'no' as const },
-]
+type FoodRecord = {
+  id: string
+  name: string
+  type: string
+  preference: string
+  recordedAt: string
+}
 
 const PREF_OPTIONS = ['환장함', '잘 먹음', '먹다가 맘', '입도 안 댐'] as const
+const FOOD_TYPES = ['습식', '건식', '간식'] as const
+
+const PREF_DOTS: Record<string, number> = {
+  '환장함': 5, '잘 먹음': 3, '먹다가 맘': 2, '입도 안 댐': 0,
+}
+const PREF_STYLE: Record<string, 'love' | 'ok' | 'no'> = {
+  '환장함': 'love', '잘 먹음': 'ok', '먹다가 맘': 'ok', '입도 안 댐': 'no',
+}
 
 function FoodDots({ count }: { count: number }) {
   return (
     <View style={{ flexDirection: 'row', gap: 3, marginBottom: 6 }}>
       {[...Array(5)].map((_, i) => (
-        <View key={i} style={[
-          styles.dot,
-          i < count ? styles.dotFilled : styles.dotEmpty,
-        ]} />
+        <View key={i} style={[styles.dot, i < count ? styles.dotFilled : styles.dotEmpty]} />
       ))}
     </View>
   )
 }
 
+function emptyForm() {
+  return { name: '', type: '습식' as string, preference: '잘 먹음' as string }
+}
+
 export default function FoodScreen() {
-  const { selectedCat } = useCats()
+  const { selectedCat, userId } = useCats()
+  const [foods, setFoods] = useState<FoodRecord[]>([])
   const [addPanel, setAddPanel] = useState(false)
-  const [selectedPref, setSelectedPref] = useState<string | null>(null)
+  const [foodName, setFoodName] = useState('')
+  const [foodType, setFoodType] = useState('습식')
+  const [foodPref, setFoodPref] = useState('잘 먹음')
+  const foodNameRef = useRef(foodName)
+  const foodTypeRef = useRef(foodType)
+  const foodPrefRef = useRef(foodPref)
+  foodNameRef.current = foodName
+  foodTypeRef.current = foodType
+  foodPrefRef.current = foodPref
   const [aiRec, setAiRec] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiPanel, setAiPanel] = useState(false)
+
+  useEffect(() => {
+    if (!userId || selectedCat.id === '__guest__') { setFoods([]); return }
+    supabase
+      .from('food_records')
+      .select('id, name, type, preference, recorded_at')
+      .eq('cat_id', selectedCat.id)
+      .order('recorded_at', { ascending: false })
+      .then(({ data }) => {
+        setFoods((data ?? []).map(r => ({
+          id: r.id as string,
+          name: r.name as string,
+          type: r.type as string,
+          preference: r.preference as string,
+          recordedAt: (r.recorded_at as string).replace(/-/g, '.'),
+        })))
+      })
+  }, [selectedCat.id, userId])
+
+  const openAdd = () => {
+    setFoodName('')
+    setFoodType('습식')
+    setFoodPref('잘 먹음')
+    setAddPanel(true)
+  }
+
+  const saveFood = async () => {
+    const name = foodNameRef.current
+    const type = foodTypeRef.current
+    const pref = foodPrefRef.current
+    if (!name.trim()) return
+    const today = new Date()
+    const recorded_at = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+    if (!userId || selectedCat.id === '__guest__') {
+      setFoods(prev => [{
+        id: Date.now().toString(),
+        name, type, preference: pref,
+        recordedAt: recorded_at.replace(/-/g, '.'),
+      }, ...prev])
+      setAddPanel(false)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('food_records')
+      .insert({
+        cat_id: selectedCat.id,
+        user_id: userId,
+        name, type, preference: pref, recorded_at,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      Alert.alert('저장 실패', error.message)
+      return
+    }
+    if (data) {
+      setFoods(prev => [{
+        id: data.id as string,
+        name: data.name as string,
+        type: data.type as string,
+        preference: data.preference as string,
+        recordedAt: (data.recorded_at as string).replace(/-/g, '.'),
+      }, ...prev])
+    }
+    setAddPanel(false)
+  }
 
   const loadAiRecommendation = async () => {
     setAiLoading(true)
     setAiPanel(true)
     try {
+      const foodData = foods.length > 0
+        ? foods.map(f => ({ name: f.name, type: f.type, pref: f.preference }))
+        : [{ name: '기록 없음', type: '-', pref: '-' }]
       const result = await analyzeFoodPreference(
         {
           name: selectedCat.name,
@@ -50,7 +142,7 @@ export default function FoodScreen() {
           gender: selectedCat.gender,
           neutered: selectedCat.neutered,
         },
-        FOODS.map(f => ({ name: f.name, type: f.type, pref: f.pref }))
+        foodData
       )
       setAiRec(result)
     } catch {
@@ -85,34 +177,44 @@ export default function FoodScreen() {
             <Text style={styles.recTitle}>AI 취향 분석 추천</Text>
           </View>
           <Text style={styles.recBody}>
-            나비는 <Text style={styles.recHighlight}>습식 위주, 생선 베이스</Text>를 선호해요.
-            {' '}닭고기 파우치는 2번 연속 거부 → 구매 비추천.
-            {' '}3살 중성화 암컷 기준 체중 유지형 사료가 적합해요.
+            {foods.length > 0
+              ? `${selectedCat.name}의 식사 기록 ${foods.length}건을 바탕으로 맞춤 추천을 받아보세요.`
+              : '식사 기록을 추가하면 AI가 취향을 분석해 드려요.'}
           </Text>
           <TouchableOpacity style={styles.recBtn} onPress={loadAiRecommendation} disabled={aiLoading}>
             {aiLoading
               ? <ActivityIndicator size="small" color="#993C1D" />
               : <Feather name="star" size={12} color="#993C1D" />}
-            <Text style={styles.recBtnText}>{aiLoading ? 'AI 분석 중...' : '맞춤 추천 더 보기'}</Text>
+            <Text style={styles.recBtnText}>{aiLoading ? 'AI 분석 중...' : '맞춤 추천 받기'}</Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.sectionTitle}>기호성 기록</Text>
 
-        <View style={styles.foodGrid}>
-          {FOODS.map(food => (
-            <View key={food.name} style={styles.foodCard}>
-              <FoodDots count={food.dots} />
-              <Text style={styles.foodName}>{food.name}</Text>
-              <Text style={styles.foodMeta}>{food.type} · {food.date}</Text>
-              <View style={[styles.prefBadge, styles[`pref_${food.prefStyle}`]]}>
-                <Text style={[styles.prefBadgeText, styles[`prefText_${food.prefStyle}`]]}>{food.pref}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+        {foods.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>아직 식사 기록이 없어요</Text>
+          </View>
+        ) : (
+          <View style={styles.foodGrid}>
+            {foods.map(food => {
+              const prefStyle = PREF_STYLE[food.preference] ?? 'ok'
+              const dots = PREF_DOTS[food.preference] ?? 3
+              return (
+                <View key={food.id} style={styles.foodCard}>
+                  <FoodDots count={dots} />
+                  <Text style={styles.foodName}>{food.name}</Text>
+                  <Text style={styles.foodMeta}>{food.type} · {food.recordedAt}</Text>
+                  <View style={[styles.prefBadge, styles[`pref_${prefStyle}`]]}>
+                    <Text style={[styles.prefBadgeText, styles[`prefText_${prefStyle}`]]}>{food.preference}</Text>
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        )}
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => setAddPanel(true)}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={openAdd}>
           <Text style={styles.primaryBtnText}>+ 식사 기록 추가</Text>
         </TouchableOpacity>
 
@@ -129,15 +231,25 @@ export default function FoodScreen() {
 
       <BottomSheet visible={addPanel} onClose={() => setAddPanel(false)} title="식사 기록 추가">
         <View style={styles.formGroup}>
-          <Text style={styles.formLabel}>사료명</Text>
-          <TextInput style={styles.formInput} placeholder="예: 고메 참치 파우치" placeholderTextColor="#bbb" />
+          <Text style={styles.formLabel}>사료명 *</Text>
+          <TextInput
+            style={styles.formInput}
+            placeholder="예: 고메 참치 파우치"
+            placeholderTextColor="#bbb"
+            value={foodName}
+            onChangeText={setFoodName}
+          />
         </View>
         <View style={styles.formGroup}>
           <Text style={styles.formLabel}>종류</Text>
           <View style={styles.typeRow}>
-            {['습식', '건식', '간식'].map(t => (
-              <TouchableOpacity key={t} style={styles.typeBtn}>
-                <Text style={styles.typeBtnText}>{t}</Text>
+            {FOOD_TYPES.map(t => (
+              <TouchableOpacity
+                key={t}
+                style={[styles.typeBtn, foodType === t && styles.typeBtnActive]}
+                onPress={() => setFoodType(t)}
+              >
+                <Text style={[styles.typeBtnText, foodType === t && styles.typeBtnTextActive]}>{t}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -148,14 +260,15 @@ export default function FoodScreen() {
             {PREF_OPTIONS.map(opt => (
               <TouchableOpacity
                 key={opt}
-                style={[styles.prefSelectBtn, selectedPref === opt && styles.prefSelectBtnActive]}
-                onPress={() => setSelectedPref(opt)}>
-                <Text style={[styles.prefSelectText, selectedPref === opt && styles.prefSelectTextActive]}>{opt}</Text>
+                style={[styles.prefSelectBtn, foodPref === opt && styles.prefSelectBtnActive]}
+                onPress={() => setFoodPref(opt)}
+              >
+                <Text style={[styles.prefSelectText, foodPref === opt && styles.prefSelectTextActive]}>{opt}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
-        <TouchableOpacity style={[styles.primaryBtn, { marginTop: 8 }]} onPress={() => setAddPanel(false)}>
+        <TouchableOpacity style={[styles.primaryBtn, { marginTop: 8 }]} onPress={saveFood}>
           <Text style={styles.primaryBtnText}>저장하기</Text>
         </TouchableOpacity>
       </BottomSheet>
@@ -171,7 +284,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5, borderBottomColor: '#EEE', backgroundColor: '#fff',
   },
   catAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FAECE7', alignItems: 'center', justifyContent: 'center' },
-  catEmoji: { fontSize: 22 },
   catName: { fontSize: 16, fontWeight: '600', color: '#1a1a1a' },
   catInfo: { fontSize: 12, color: '#999', marginTop: 1 },
   scroll: { flex: 1 },
@@ -182,12 +294,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF0EB', borderWidth: 0.5, borderColor: '#F5C4B3',
   },
   recHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  recHeaderEmoji: { fontSize: 18 },
   recTitle: { fontSize: 14, fontWeight: '600', color: '#993C1D' },
   recBody: { fontSize: 13, color: '#712B13', lineHeight: 20 },
   recHighlight: { fontWeight: '700' },
   recBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, borderWidth: 0.5, borderColor: '#E9785A', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, alignSelf: 'flex-start' },
   recBtnText: { fontSize: 12, color: '#993C1D', fontWeight: '500' },
+  emptyCard: { backgroundColor: '#F7F7F7', borderRadius: 14, padding: 24, alignItems: 'center', marginBottom: 16 },
+  emptyText: { fontSize: 13, color: '#bbb' },
   foodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
   foodCard: {
     width: '47.5%', backgroundColor: '#fff', borderRadius: 14, padding: 14,
@@ -211,10 +324,12 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   formGroup: { marginBottom: 16 },
   formLabel: { fontSize: 12, color: '#999', marginBottom: 6 },
-  formInput: { backgroundColor: '#F7F7F7', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#1a1a1a' },
+  formInput: { backgroundColor: '#F7F7F7', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#1a1a1a', borderWidth: 0.5, borderColor: '#E5E5E5' },
   typeRow: { flexDirection: 'row', gap: 8 },
   typeBtn: { borderWidth: 0.5, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
+  typeBtnActive: { backgroundColor: '#FAECE7', borderColor: '#E9785A' },
   typeBtnText: { fontSize: 13, color: '#555' },
+  typeBtnTextActive: { color: '#993C1D', fontWeight: '600' },
   prefRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   prefSelectBtn: { borderWidth: 0.5, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   prefSelectBtnActive: { backgroundColor: '#FAECE7', borderColor: '#E9785A' },

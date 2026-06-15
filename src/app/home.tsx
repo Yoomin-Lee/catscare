@@ -2,7 +2,7 @@ import { Image, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacit
 import Feather from '@expo/vector-icons/Feather'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
 import * as ImagePicker from 'expo-image-picker'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BottomSheet from '@/components/bottom-sheet'
 import { useCats, catAvatarColor, type Cat } from '@/lib/cats-context'
@@ -85,10 +85,109 @@ const PROVIDER_ICON: Record<AccountInfo['provider'], string> = {
   unknown: 'user',
 }
 
+const HOME_FREQ: Record<string, string> = {
+  daily: '매일', every_other: '격일', weekly: '매주', monthly: '매월',
+}
+
+type HomeMed = { id: string; name: string; detail: string }
+
 export default function HomeScreen() {
-  const { cats, selectedId, selectedCat, selectCat, addCat, updateCat, removeCat } = useCats()
+  const { cats, selectedId, selectedCat, selectCat, addCat, updateCat, removeCat, userId } = useCats()
+  const [homeMeds, setHomeMeds] = useState<HomeMed[]>([])
+  const [homeWeights, setHomeWeights] = useState<{ current: number; prev: number | null }>({ current: selectedCat.weightKg, prev: null })
+  const [latestFood, setLatestFood] = useState<{ name: string; type: string; preference: string; recordedAt: string } | null>(null)
+  type Vaccination = { id: string; name: string; done: boolean; nextInfo: string }
+  const [vaccs, setVaccs] = useState<Vaccination[]>([])
+  const [vaccSheet, setVaccSheet] = useState<'add' | 'edit' | null>(null)
+  const [editVacc, setEditVacc] = useState<Vaccination | null>(null)
+  const [vaccName, setVaccName] = useState('')
+  const [vaccDone, setVaccDone] = useState(false)
+  const [vaccNext, setVaccNext] = useState('')
+  const vaccNameRef = useRef(vaccName)
+  const vaccDoneRef = useRef(vaccDone)
+  const vaccNextRef = useRef(vaccNext)
+  vaccNameRef.current = vaccName
+  vaccDoneRef.current = vaccDone
+  vaccNextRef.current = vaccNext
   const { exitGuestMode } = useAuth()
   const { getSchedule } = useSchedule()
+
+  useEffect(() => {
+    if (!userId || selectedCat.id === '__guest__') {
+      setHomeWeights({ current: selectedCat.weightKg, prev: null })
+      return
+    }
+    supabase
+      .from('weight_records')
+      .select('weight_kg')
+      .eq('cat_id', selectedCat.id)
+      .order('recorded_at', { ascending: false })
+      .limit(2)
+      .then(({ data }) => {
+        if (!data || data.length === 0) {
+          setHomeWeights({ current: selectedCat.weightKg, prev: null })
+        } else {
+          setHomeWeights({
+            current: parseFloat(String(data[0].weight_kg)),
+            prev: data.length > 1 ? parseFloat(String(data[1].weight_kg)) : null,
+          })
+        }
+      })
+  }, [selectedCat.id, userId, selectedCat.weightKg])
+
+  useEffect(() => {
+    if (!userId || selectedCat.id === '__guest__') { setVaccs([]); return }
+    supabase
+      .from('vaccinations')
+      .select('id, name, done, next_info')
+      .eq('cat_id', selectedCat.id)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        setVaccs((data ?? []).map(r => ({
+          id: r.id as string,
+          name: r.name as string,
+          done: Boolean(r.done),
+          nextInfo: (r.next_info as string) || '',
+        })))
+      })
+  }, [selectedCat.id, userId])
+
+  useEffect(() => {
+    if (!userId || selectedCat.id === '__guest__') { setLatestFood(null); return }
+    supabase
+      .from('food_records')
+      .select('name, type, preference, recorded_at')
+      .eq('cat_id', selectedCat.id)
+      .order('recorded_at', { ascending: false })
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (!data) { setLatestFood(null); return }
+        setLatestFood({
+          name: data.name as string,
+          type: data.type as string,
+          preference: data.preference as string,
+          recordedAt: (data.recorded_at as string).replace(/-/g, '.'),
+        })
+      })
+  }, [selectedCat.id, userId])
+
+  useEffect(() => {
+    if (!userId || selectedCat.id === '__guest__') { setHomeMeds([]); return }
+    supabase
+      .from('medications')
+      .select('id, name, dosage, frequency, doses_per_day')
+      .eq('cat_id', selectedCat.id)
+      .order('created_at', { ascending: true })
+      .limit(3)
+      .then(({ data }) => {
+        setHomeMeds((data ?? []).map(m => ({
+          id: m.id as string,
+          name: m.name as string,
+          detail: `${m.dosage}${m.dosage ? ' · ' : ''}${HOME_FREQ[m.frequency as string] ?? m.frequency} ${m.doses_per_day}회`,
+        })))
+      })
+  }, [selectedCat.id, userId])
 
   const schedule = getSchedule(selectedCat.id)
   const nextHospital = (() => { const d = new Date(schedule.hospitalLastDate); d.setMonth(d.getMonth() + schedule.hospitalCycle); return d })()
@@ -98,6 +197,45 @@ export default function HomeScreen() {
   const fmtDate = (d: Date) => `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`
   const dday = (days: number) => days >= 0 ? `D-${days}` : `D+${Math.abs(days)}`
   const ddayColor = (days: number) => days <= 3 ? '#BA7517' : days <= 14 ? '#993C1D' : '#1D9E75'
+
+  const openAddVacc = () => {
+    setVaccName(''); setVaccDone(false); setVaccNext('')
+    setEditVacc(null); setVaccSheet('add')
+  }
+  const openEditVacc = (v: Vaccination) => {
+    setVaccName(v.name); setVaccDone(v.done); setVaccNext(v.nextInfo)
+    setEditVacc(v); setVaccSheet('edit')
+  }
+  const saveVacc = async () => {
+    const name = vaccNameRef.current
+    const done = vaccDoneRef.current
+    const nextInfo = vaccNextRef.current
+    if (!name.trim()) return
+    if (!userId || selectedCat.id === '__guest__') {
+      if (vaccSheet === 'edit' && editVacc) {
+        setVaccs(prev => prev.map(v => v.id === editVacc.id ? { ...v, name, done, nextInfo } : v))
+      } else {
+        setVaccs(prev => [...prev, { id: Date.now().toString(), name, done, nextInfo }])
+      }
+      setVaccSheet(null); return
+    }
+    if (vaccSheet === 'edit' && editVacc) {
+      await supabase.from('vaccinations').update({ name, done, next_info: nextInfo }).eq('id', editVacc.id)
+      setVaccs(prev => prev.map(v => v.id === editVacc.id ? { ...v, name, done, nextInfo } : v))
+    } else {
+      const { data } = await supabase.from('vaccinations')
+        .insert({ cat_id: selectedCat.id, user_id: userId, name, done, next_info: nextInfo })
+        .select().single()
+      if (data) setVaccs(prev => [...prev, { id: data.id as string, name: data.name as string, done: Boolean(data.done), nextInfo: (data.next_info as string) || '' }])
+    }
+    setVaccSheet(null)
+  }
+  const deleteVacc = async () => {
+    if (!editVacc) return
+    setVaccs(prev => prev.filter(v => v.id !== editVacc.id))
+    if (userId) await supabase.from('vaccinations').delete().eq('id', editVacc.id)
+    setVaccSheet(null)
+  }
 
   const [sheetMode, setSheetMode] = useState<'add' | 'edit' | 'settings' | null>(null)
   const [account, setAccount] = useState<AccountInfo | null>(null)
@@ -277,76 +415,145 @@ export default function HomeScreen() {
 
         {/* ── 투약 현황 ── */}
         <Text style={styles.sectionTitle}>투약 현황</Text>
-        <View style={styles.medCard}>
-          <View style={styles.medRow}>
-            <View style={styles.medIconWrap}>
-              <FontAwesome5 name="pills" size={15} color="#1D9E75" />
-            </View>
-            <View style={styles.medBody}>
-              <Text style={styles.medName}>구충제 (내부)</Text>
-              <Text style={styles.medDetail}>1정 · 매월 1회 · 오전 9시</Text>
-            </View>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgeText}>복용중</Text>
-            </View>
+        {homeMeds.length === 0 ? (
+          <View style={[styles.medCard, { paddingVertical: 16, alignItems: 'center' }]}>
+            <Text style={{ fontSize: 13, color: '#bbb' }}>등록된 투약이 없어요</Text>
           </View>
-        </View>
+        ) : (
+          <View style={styles.medCard}>
+            {homeMeds.map((med, i) => (
+              <View key={med.id} style={[styles.medRow, i < homeMeds.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: '#F0F0F0', paddingBottom: 12, marginBottom: 12 }]}>
+                <View style={styles.medIconWrap}>
+                  <FontAwesome5 name="pills" size={15} color="#1D9E75" />
+                </View>
+                <View style={styles.medBody}>
+                  <Text style={styles.medName}>{med.name}</Text>
+                  <Text style={styles.medDetail}>{med.detail}</Text>
+                </View>
+                <View style={styles.statusBadge}>
+                  <Text style={styles.statusBadgeText}>복용중</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* ── 건강 통계 ── */}
         <Text style={styles.sectionTitle}>건강 통계</Text>
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Feather name="activity" size={18} color="#1D9E75" />
-            <Text style={styles.statNum}>{selectedCat.weightKg}<Text style={styles.statUnit}>kg</Text></Text>
+            <Text style={styles.statNum}>{homeWeights.current.toFixed(1)}<Text style={styles.statUnit}>kg</Text></Text>
             <Text style={styles.statLabel}>현재 체중</Text>
           </View>
           <View style={styles.statCard}>
-            <Feather name="trending-down" size={18} color="#1D9E75" />
-            <Text style={[styles.statNum, { color: '#1D9E75', fontSize: 18 }]}>▼0.1</Text>
-            <Text style={styles.statLabel}>전주 대비</Text>
+            {homeWeights.prev !== null ? (
+              <>
+                <Feather
+                  name={homeWeights.current <= homeWeights.prev ? 'trending-down' : 'trending-up'}
+                  size={18}
+                  color={homeWeights.current <= homeWeights.prev ? '#1D9E75' : '#E9785A'}
+                />
+                <Text style={[styles.statNum, { color: homeWeights.current <= homeWeights.prev ? '#1D9E75' : '#E9785A', fontSize: 18 }]}>
+                  {homeWeights.current <= homeWeights.prev ? '▼' : '▲'}{Math.abs(homeWeights.current - homeWeights.prev).toFixed(2)}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Feather name="minus" size={18} color="#bbb" />
+                <Text style={[styles.statNum, { color: '#bbb', fontSize: 18 }]}>-</Text>
+              </>
+            )}
+            <Text style={styles.statLabel}>직전 대비</Text>
           </View>
           <View style={styles.statCard}>
             <Feather name="target" size={18} color="#534AB7" />
-            <Text style={styles.statNum}>{(selectedCat.weightKg - 0.1).toFixed(1)}<Text style={styles.statUnit}>kg</Text></Text>
+            <Text style={styles.statNum}>{(homeWeights.current - 0.1).toFixed(1)}<Text style={styles.statUnit}>kg</Text></Text>
             <Text style={styles.statLabel}>목표 체중</Text>
           </View>
         </View>
 
         {/* ── 최근 식사 ── */}
         <Text style={styles.sectionTitle}>최근 식사</Text>
-        <View style={styles.foodCard}>
-          <View style={styles.foodIconWrap}>
-            <Feather name="coffee" size={18} color="#E9785A" />
+        {latestFood ? (
+          <View style={styles.foodCard}>
+            <View style={styles.foodIconWrap}>
+              <Feather name="coffee" size={18} color="#E9785A" />
+            </View>
+            <View style={styles.foodBody}>
+              <Text style={styles.foodName}>{latestFood.name}</Text>
+              <Text style={styles.foodMeta}>{latestFood.type} · {latestFood.recordedAt}</Text>
+            </View>
+            <View style={styles.foodPref}>
+              <Feather name="heart" size={13} color="#E9785A" />
+              <Text style={styles.foodPrefText}>{latestFood.preference}</Text>
+            </View>
           </View>
-          <View style={styles.foodBody}>
-            <Text style={styles.foodName}>고메 참치+새우 파우치</Text>
-            <Text style={styles.foodMeta}>습식 · 2025.11.18</Text>
+        ) : (
+          <View style={[styles.foodCard, { justifyContent: 'center' }]}>
+            <Text style={{ fontSize: 13, color: '#bbb' }}>아직 식사 기록이 없어요</Text>
           </View>
-          <View style={styles.foodPref}>
-            <Feather name="heart" size={13} color="#E9785A" />
-            <Text style={styles.foodPrefText}>환장함</Text>
-          </View>
-        </View>
+        )}
 
         {/* ── 접종 현황 ── */}
-        <Text style={styles.sectionTitle}>접종 현황</Text>
-        <View style={styles.vaccCard}>
-          {[
-            { name: '종합백신 (FVRCP)', next: '다음 접종 2026.03', done: true },
-            { name: '광견병 백신', next: '다음 접종 2026.03', done: true },
-            { name: '고양이 백혈병 (FeLV)', next: '미접종 · 수의사 상담 필요', done: false },
-          ].map((v, i, arr) => (
-            <View key={v.name} style={[styles.vaccItem, i < arr.length - 1 && styles.vaccBorder]}>
-              <Feather name={v.done ? 'check-circle' : 'circle'} size={16} color={v.done ? '#1D9E75' : '#BA7517'} />
-              <View style={styles.vaccBody}>
-                <Text style={styles.vaccName}>{v.name}</Text>
-                <Text style={[styles.vaccNext, !v.done && { color: '#BA7517' }]}>{v.next}</Text>
-              </View>
-            </View>
-          ))}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>접종 현황</Text>
+          <TouchableOpacity onPress={openAddVacc} style={styles.sectionAddBtn}>
+            <Feather name="plus" size={14} color="#1D9E75" />
+            <Text style={styles.sectionAddText}>추가</Text>
+          </TouchableOpacity>
         </View>
+        {vaccs.length === 0 ? (
+          <View style={[styles.vaccCard, { paddingVertical: 16, alignItems: 'center' }]}>
+            <Text style={{ fontSize: 13, color: '#bbb' }}>등록된 접종 기록이 없어요</Text>
+          </View>
+        ) : (
+          <View style={styles.vaccCard}>
+            {vaccs.map((v, i) => (
+              <TouchableOpacity key={v.id} style={[styles.vaccItem, i < vaccs.length - 1 && styles.vaccBorder]} onPress={() => openEditVacc(v)}>
+                <Feather name={v.done ? 'check-circle' : 'circle'} size={16} color={v.done ? '#1D9E75' : '#BA7517'} />
+                <View style={styles.vaccBody}>
+                  <Text style={styles.vaccName}>{v.name}</Text>
+                  {v.nextInfo ? <Text style={[styles.vaccNext, !v.done && { color: '#BA7517' }]}>{v.nextInfo}</Text> : null}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
       </ScrollView>
+
+      {/* ── 접종 추가/수정 바텀시트 ── */}
+      <BottomSheet visible={vaccSheet !== null} onClose={() => setVaccSheet(null)} title={vaccSheet === 'edit' ? '접종 수정' : '접종 추가'}>
+        <Text style={styles.fieldLabel}>백신명 *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="예: 종합백신 (FVRCP), 광견병"
+          placeholderTextColor="#bbb"
+          value={vaccName}
+          onChangeText={setVaccName}
+        />
+        <View style={[styles.toggleRow, { marginTop: 14 }]}>
+          <Text style={styles.toggleLabel}>접종 완료</Text>
+          <Switch value={vaccDone} onValueChange={setVaccDone} trackColor={{ false: '#ddd', true: '#1D9E75' }} thumbColor="#fff" />
+        </View>
+        <Text style={[styles.fieldLabel, { marginTop: 4 }]}>다음 접종 정보</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="예: 다음 접종 2027.03, 미접종"
+          placeholderTextColor="#bbb"
+          value={vaccNext}
+          onChangeText={setVaccNext}
+        />
+        <TouchableOpacity style={styles.saveBtn} onPress={saveVacc}>
+          <Text style={styles.saveBtnText}>저장하기</Text>
+        </TouchableOpacity>
+        {vaccSheet === 'edit' && (
+          <TouchableOpacity style={styles.deleteBtn} onPress={deleteVacc}>
+            <Text style={styles.deleteBtnText}>삭제</Text>
+          </TouchableOpacity>
+        )}
+      </BottomSheet>
 
       {/* ── 계정 설정 바텀시트 ── */}
       <BottomSheet visible={sheetMode === 'settings'} onClose={() => setSheetMode(null)} title="계정 설정">
@@ -731,4 +938,7 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   deleteBtn: { alignItems: 'center', marginTop: 12, paddingVertical: 8 },
   deleteBtnText: { color: '#E9785A', fontSize: 13 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 8 },
+  sectionAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4 },
+  sectionAddText: { color: '#1D9E75', fontSize: 12, fontWeight: '600' },
 })

@@ -204,7 +204,13 @@ function WeightLineChart({ data }: { data: { labels: string[]; values: number[] 
   )
 }
 
-type MedRow = { id: string; name: string; detail: string }
+type Medication = {
+  id: string
+  name: string
+  dosage: string
+  frequency: 'daily' | 'every_other' | 'weekly' | 'monthly'
+  dosesPerDay: number
+}
 
 function fmtDate(d: Date) {
   const y = d.getFullYear()
@@ -217,7 +223,10 @@ export default function BodyScreen() {
   const { selectedCat, userId } = useCats()
   const [period, setPeriod] = useState<'w' | 'm' | 'y'>('m')
   const [records, setRecords] = useState<WeightRecord[]>([])
-  const [meds, setMeds] = useState<MedRow[]>([])
+  const [meds, setMeds] = useState<Medication[]>([])
+  const [medSheet, setMedSheet] = useState<'add' | 'edit' | null>(null)
+  const [editMed, setEditMed] = useState<Medication | null>(null)
+  const [medForm, setMedForm] = useState({ name: '', dosage: '', frequency: 'daily' as Medication['frequency'], dosesPerDay: 1 })
   const [addSheet, setAddSheet] = useState(false)
   const [addWeight, setAddWeight] = useState('')
   const [addDate, setAddDate] = useState<Date>(new Date())
@@ -249,10 +258,61 @@ export default function BodyScreen() {
         setMeds((data ?? []).map(m => ({
           id: m.id as string,
           name: m.name as string,
-          detail: `${m.dosage} · ${FREQ_LABEL[m.frequency as string] ?? m.frequency} ${m.doses_per_day}회`,
+          dosage: (m.dosage as string) || '',
+          frequency: (m.frequency as Medication['frequency']) || 'daily',
+          dosesPerDay: (m.doses_per_day as number) || 1,
         })))
       })
   }, [selectedCat.id, userId])
+
+  const openAddMed = () => {
+    setMedForm({ name: '', dosage: '', frequency: 'daily', dosesPerDay: 1 })
+    setEditMed(null)
+    setMedSheet('add')
+  }
+  const openEditMed = (med: Medication) => {
+    setMedForm({ name: med.name, dosage: med.dosage, frequency: med.frequency, dosesPerDay: med.dosesPerDay })
+    setEditMed(med)
+    setMedSheet('edit')
+  }
+  const saveMed = async () => {
+    if (!medForm.name.trim()) return
+    if (!userId || selectedCat.id === '__guest__') {
+      if (medSheet === 'edit' && editMed) {
+        setMeds(prev => prev.map(m => m.id === editMed.id ? { ...medForm, id: m.id } : m))
+      } else {
+        setMeds(prev => [...prev, { ...medForm, id: Date.now().toString() }])
+      }
+      setMedSheet(null)
+      return
+    }
+    if (medSheet === 'edit' && editMed) {
+      await supabase.from('medications').update({
+        name: medForm.name, dosage: medForm.dosage,
+        frequency: medForm.frequency, doses_per_day: medForm.dosesPerDay,
+      }).eq('id', editMed.id)
+      setMeds(prev => prev.map(m => m.id === editMed.id ? { ...medForm, id: m.id } : m))
+    } else {
+      const { data } = await supabase.from('medications').insert({
+        cat_id: selectedCat.id, user_id: userId,
+        name: medForm.name, dosage: medForm.dosage,
+        frequency: medForm.frequency, doses_per_day: medForm.dosesPerDay,
+      }).select().single()
+      if (data) setMeds(prev => [...prev, {
+        id: data.id as string, name: data.name as string,
+        dosage: (data.dosage as string) || '',
+        frequency: (data.frequency as Medication['frequency']) || 'daily',
+        dosesPerDay: (data.doses_per_day as number) || 1,
+      }])
+    }
+    setMedSheet(null)
+  }
+  const deleteMed = async () => {
+    if (!editMed) return
+    setMeds(prev => prev.filter(m => m.id !== editMed.id))
+    if (userId) await supabase.from('medications').delete().eq('id', editMed.id)
+    setMedSheet(null)
+  }
 
   const openAdd = () => {
     setAddWeight('')
@@ -360,28 +420,100 @@ export default function BodyScreen() {
           <Text style={styles.addBtnText}>체중 기록 추가</Text>
         </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>투약 기록</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>투약 기록</Text>
+          {meds.length < 7 ? (
+            <TouchableOpacity onPress={openAddMed} style={styles.sectionAddBtn}>
+              <Feather name="plus" size={14} color="#1D9E75" />
+              <Text style={styles.sectionAddText}>추가 ({meds.length}/7)</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.sectionLimitText}>최대 7개 ({meds.length}/7)</Text>
+          )}
+        </View>
         {meds.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyCardText}>등록된 투약이 없어요{'\n'}알람 탭에서 투약을 추가해보세요</Text>
+            <Text style={styles.emptyCardText}>등록된 투약이 없어요</Text>
           </View>
         ) : (
           <View style={styles.medCard}>
             {meds.map((med, i) => (
-              <View key={med.id} style={[styles.medItem, i < meds.length - 1 && styles.medBorder]}>
+              <TouchableOpacity
+                key={med.id}
+                style={[styles.medItem, i < meds.length - 1 && styles.medBorder]}
+                onPress={() => openEditMed(med)}
+              >
                 <View style={[styles.medIcon, styles.iconDone]}>
-                  <Feather name="check" size={12} color="#1D9E75" />
+                  <FontAwesome5 name="pills" size={11} color="#1D9E75" />
                 </View>
                 <View style={styles.medBody}>
                   <Text style={styles.medName}>{med.name}</Text>
-                  <Text style={styles.medDetail}>{med.detail}</Text>
+                  <Text style={styles.medDetail}>
+                    {med.dosage}{med.dosage ? ' · ' : ''}{FREQ_LABEL[med.frequency]} {med.dosesPerDay}회
+                  </Text>
                 </View>
-              </View>
+                <Feather name="chevron-right" size={14} color="#ddd" />
+              </TouchableOpacity>
             ))}
           </View>
         )}
 
       </ScrollView>
+
+      <BottomSheet visible={medSheet !== null} onClose={() => setMedSheet(null)} title={medSheet === 'edit' ? '투약 수정' : '투약 추가'}>
+        <Text style={styles.fieldLabel}>약 이름 *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="예: 구충제, 항생제"
+          placeholderTextColor="#bbb"
+          value={medForm.name}
+          onChangeText={v => setMedForm(m => ({ ...m, name: v }))}
+        />
+        <Text style={[styles.fieldLabel, { marginTop: 14 }]}>용량</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="예: 1정, 0.5ml"
+          placeholderTextColor="#bbb"
+          value={medForm.dosage}
+          onChangeText={v => setMedForm(m => ({ ...m, dosage: v }))}
+        />
+        <Text style={[styles.fieldLabel, { marginTop: 14 }]}>복용 주기</Text>
+        <View style={styles.freqRow}>
+          {(['daily', 'every_other', 'weekly', 'monthly'] as const).map(f => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.freqBtn, medForm.frequency === f && styles.freqBtnActive]}
+              onPress={() => setMedForm(m => ({ ...m, frequency: f }))}
+            >
+              <Text style={[styles.freqBtnText, medForm.frequency === f && styles.freqBtnTextActive]}>
+                {FREQ_LABEL[f]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={[styles.fieldLabel, { marginTop: 14 }]}>일 복용 횟수</Text>
+        <View style={styles.dosesRow}>
+          {([1, 2, 3] as const).map(n => (
+            <TouchableOpacity
+              key={n}
+              style={[styles.dosesBtn, medForm.dosesPerDay === n && styles.dosesBtnActive]}
+              onPress={() => setMedForm(m => ({ ...m, dosesPerDay: n }))}
+            >
+              <Text style={[styles.dosesBtnText, medForm.dosesPerDay === n && styles.dosesBtnTextActive]}>
+                {n}회
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity style={styles.saveBtn} onPress={saveMed}>
+          <Text style={styles.saveBtnText}>저장하기</Text>
+        </TouchableOpacity>
+        {medSheet === 'edit' && (
+          <TouchableOpacity style={styles.deleteMedBtn} onPress={deleteMed}>
+            <Text style={styles.deleteMedBtnText}>삭제</Text>
+          </TouchableOpacity>
+        )}
+      </BottomSheet>
 
       <BottomSheet visible={addSheet} onClose={() => setAddSheet(false)} title="체중 기록 추가">
         <Text style={styles.fieldLabel}>체중 (kg)</Text>
@@ -467,6 +599,22 @@ const styles = StyleSheet.create({
   dateBtnText: { flex: 1, fontSize: 14, color: '#1a1a1a' },
   saveBtn: { backgroundColor: '#1D9E75', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 20 },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 4 },
+  sectionAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4 },
+  sectionAddText: { color: '#1D9E75', fontSize: 12, fontWeight: '600' },
+  freqRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  freqBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 0.5, borderColor: '#E5E5E5' },
+  freqBtnActive: { backgroundColor: '#1D9E75', borderColor: '#1D9E75' },
+  freqBtnText: { fontSize: 13, color: '#666' },
+  freqBtnTextActive: { color: '#fff', fontWeight: '600' },
+  dosesRow: { flexDirection: 'row', gap: 8 },
+  dosesBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 0.5, borderColor: '#E5E5E5', alignItems: 'center' },
+  dosesBtnActive: { backgroundColor: '#1D9E75', borderColor: '#1D9E75' },
+  dosesBtnText: { fontSize: 14, color: '#666' },
+  dosesBtnTextActive: { color: '#fff', fontWeight: '600' },
+  deleteMedBtn: { alignItems: 'center', marginTop: 12, paddingVertical: 8 },
+  deleteMedBtnText: { color: '#E9785A', fontSize: 13 },
+  sectionLimitText: { fontSize: 12, color: '#bbb' },
 })
 
 const calStyles = StyleSheet.create({

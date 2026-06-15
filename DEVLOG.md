@@ -625,6 +625,135 @@ API 키 등록 즉시 활성화 가능한 구조로 사전 구현.
 
 ---
 
+---
+
+## 2026-06-15 (Day 8) — 전체 탭 DB 연동 완성
+
+### 45. 로그인 후 데이터 사라짐 버그 수정
+**파일:** `src/lib/cats-context.tsx`
+
+- **원인 1:** `addCat` / `updateCat` / `removeCat` 함수 내 `userId` stale closure
+  → `userIdRef` 패턴으로 해결 (render마다 `.current = userId` 갱신)
+- **원인 2:** `cats` 테이블에 `authenticated` 롤 GRANT 누락
+  → Supabase SQL Editor에서 아래 실행하여 해결
+  ```sql
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.cats TO authenticated;
+  ```
+- RLS 정책도 누락 → `auth.uid() = user_id` 조건으로 추가
+
+---
+
+### 46. 투약 기록 CRUD 구현
+**파일:** `src/app/body.tsx`
+
+- `Medication` 타입: `{ id, name, dosage, frequency, dosesPerDay }`
+- `medications` 테이블에서 실 데이터 FETCH (catId 기준)
+- 투약 추가/수정/삭제 BottomSheet:
+  - 약 이름, 용량, 복용 주기 (매일·격일·주1회·필요시), 일 복용 횟수 (1·2·3회)
+- **최대 7개 제한**: 7개 미만 → "추가 (n/7)" 버튼, 7개 도달 → "최대 7개" 텍스트
+- 게스트 모드: 로컬 상태만 유지
+
+---
+
+### 47. 체중 기록 테이블 활성화
+**파일:** Supabase SQL Editor
+
+- `weight_records` 테이블이 이미 존재했으나 GRANT 미설정 상태
+  ```sql
+  ALTER TABLE public.weight_records ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "weight user" ON public.weight_records ...;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.weight_records TO authenticated;
+  ```
+- `body.tsx` 체중 그래프가 실 데이터로 정상 표시됨 확인
+
+---
+
+### 48. 홈 탭 건강 통계 실 데이터 연동
+**파일:** `src/app/home.tsx`
+
+- `homeWeights` 상태 추가: `{ current: number; prev: number | null }`
+  → `weight_records` 최근 2건 FETCH → 현재 체중 + 이전 체중 비교
+- 체중 변화 표시: `▲ +0.3kg` / `▼ -0.2kg` / `—`
+- 기존 하드코딩 `4.2kg ▲ +0.3kg` → 실 데이터로 완전 교체
+
+---
+
+### 49. 식단/기호성 탭 DB 연동
+**파일:** `src/app/food.tsx`
+
+- `food_records` 테이블 생성 및 GRANT 설정
+  ```sql
+  CREATE TABLE public.food_records (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cat_id      UUID REFERENCES cats(id) ON DELETE CASCADE,
+    user_id     UUID REFERENCES auth.users(id),
+    name        TEXT NOT NULL,
+    type        TEXT NOT NULL,
+    preference  TEXT NOT NULL,
+    recorded_at DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+  );
+  ```
+- 기존 `FOODS` 하드코딩 배열 → `FoodRecord[]` DB 연동으로 전환
+- 식사 기록 추가 → `food_records` INSERT
+- React Compiler stale closure 해결: 단일 `form` 객체 → 별도 state 변수 분리
+  ```ts
+  const [foodName, setFoodName] = useState('')
+  const [foodType, setFoodType] = useState('습식')
+  const [foodPref, setFoodPref] = useState('잘 먹음')
+  const foodNameRef = useRef(foodName)
+  // ...
+  foodNameRef.current = foodName  // render마다 갱신
+  ```
+- AI 취향 분석: 하드코딩 샘플 데이터 → 실제 `foods` 상태 데이터로 교체
+
+---
+
+### 50. 홈 탭 최근 식사 연동
+**파일:** `src/app/home.tsx`
+
+- `latestFood` 상태 추가: `{ name: string; type: string; preference: string } | null`
+  → `food_records` 최근 1건 FETCH (catId, DESC)
+- 기존 하드코딩 "고메 참치 파우치 · 습식 · 잘 먹음" → 실 데이터로 교체
+- 기록 없을 경우 "식사 기록 없음" 안내
+
+---
+
+### 51. 홈 탭 투약 현황 연동
+**파일:** `src/app/home.tsx`
+
+- `homeMeds` 상태 추가: `Medication[]` (최대 3건)
+  → `medications` 테이블 FETCH, limit 3
+- 기존 하드코딩 리스트 → 실 데이터로 교체
+- 기록 없을 경우 빈 상태 처리
+
+---
+
+### 52. 홈 탭 접종 현황 CRUD 구현
+**파일:** `src/app/home.tsx`
+
+- `Vaccination` 타입: `{ id, name, done, nextInfo }`
+- `vaccinations` 테이블 생성 및 GRANT 설정
+- 전체 CRUD: `openAddVacc`, `openEditVacc`, `saveVacc`, `deleteVacc`
+- BottomSheet: 백신명 TextInput, 접종완료 Switch, 다음 접종 정보 TextInput
+- 섹션 헤더 우측 "추가" 버튼, 항목 탭 시 수정 패널 오픈
+- 기존 하드코딩 3종 리스트 → 실 DB 데이터로 완전 교체
+- 게스트 모드: 로컬 상태만 유지
+
+---
+
+### 현재 상태 요약
+
+| 탭 | 파일 | DB 연동 |
+|---|---|---|
+| 홈 | `home.tsx` | ✅ 완전 연동 (체중·투약·식사·접종) |
+| 주기 알람 | `index.tsx` | ⚠️ schedule-context 인메모리 (페이지 새로고침 시 초기화) |
+| 병원 기록 | `hospital.tsx` | ✅ 완전 연동 (혈액검사·접종 기록) |
+| 체중/투약 | `body.tsx` | ✅ 완전 연동 |
+| 식단/기호성 | `food.tsx` | ✅ 완전 연동 |
+
+---
+
 ## 남은 작업 (TODO)
 
 - [x] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장
@@ -642,6 +771,11 @@ API 키 등록 즉시 활성화 가능한 구조로 사전 구현.
 - [x] 접종 백신 칩 가로 스크롤 → 줄바꿈 (웹 마우스 지원)
 - [x] 홈 탭 "다가오는 일정" 고양이별 동적 연동 (ScheduleContext)
 - [x] Gemini AI 연동 (식단 추천 · 진료 녹음 요약) — Edge Function 서버사이드 처리
+- [x] 투약 기록 CRUD (body.tsx, 최대 7개)
+- [x] 식단/기호성 탭 food_records DB 연동
+- [x] 홈 탭 전체 실 데이터 연동 (체중·투약·식사·접종)
+- [x] 로그인 후 데이터 사라짐 버그 수정 (stale closure + GRANT 누락)
+- [ ] schedule-context DB 연동 (현재 인메모리 → 새로고침 시 초기화)
 - [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] 소변 검사 기록 UI 구현
 - [ ] 푸시 알림 실제 발송 연동 (Expo Notifications)
