@@ -24,7 +24,7 @@ const TABS: TabConfig[] = [
 export default function AppTabs() {
   const insets = useSafeAreaInsets()
   return (
-    <Tabs style={styles.container}>
+    <Tabs style={{ flex: 1, backgroundColor: '#FFF8F5' }}>
       <View style={styles.header}>
         <View style={styles.logoBadge}>
           <FontAwesome5 name="cat" size={18} color="#fff" style={{ transform: [{ translateY: 1 }] }} />
@@ -35,9 +35,9 @@ export default function AppTabs() {
         </Text>
         <Text style={styles.brandPaw}>🐾</Text>
       </View>
-      <TabSlot style={styles.slot} />
+      <TabSlot style={{ flex: 1 }} />
       <TabList asChild>
-        <View style={[styles.tabBar, { paddingBottom: Math.max(8, insets.bottom) }]}>
+        <View style={StyleSheet.flatten([styles.tabBar, { paddingBottom: Math.max(8, insets.bottom) }])}>
           {TABS.map(tab => (
             <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
               <TabButton tab={tab}>{tab.label}</TabButton>

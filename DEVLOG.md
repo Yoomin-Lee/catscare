@@ -894,6 +894,66 @@ Day 9까지 로컬에만 있던 Edge Function 2개를 Supabase 서버에 배포�
 
 ---
 
+## 2026-06-16 (Day 11) — 모바일 홈화면 화이트스크린 버그 수정
+
+### 버그 증상
+게스트 모드 또는 로그인 후 앱 화면(AppTabs)으로 진입 시 완전 흰 화면(white screen) 발생 — 탭바 포함 전체 UI 렌더링 불가.
+
+### 원인 분석 (2단계)
+
+#### 원인 1: `AnimatedSplashOverlay` — `scheduleOnRN` 웹 미지원
+**파일:** `src/components/animated-icon.tsx`
+
+- `react-native-worklets`의 `scheduleOnRN`은 웹에서 동작하지 않음
+- Reanimated의 `Keyframe` 애니메이션이 웹에서 `CSSStyleDeclaration` indexed setter를 시도 → `Failed to set an indexed property [0]` 크래시
+- 수정: `Platform.OS === 'web'` 조건으로 웹에서는 `null` 반환, Native 전용 `NativeSplashOverlay`로 분리
+
+```tsx
+export function AnimatedSplashOverlay() {
+  if (Platform.OS === 'web') return null;
+  return <NativeSplashOverlay />;
+}
+```
+
+#### 원인 2 (핵심): `TabList asChild` 자식 View 배열 스타일 — Radix Slot `mergeProps` 버그
+**파일:** `src/components/app-tabs.web.tsx`
+
+```
+expo-router/ui의 TabList (asChild=true)
+  → ViewSlot (= Radix UI Slot 래퍼)
+    → mergeProps(slotStyle, childStyle)
+      → style: { ...slotPropValue, ...childPropValue }
+```
+
+`childPropValue`가 배열(`[styles.tabBar, { paddingBottom: ... }]`)일 때:
+```js
+{ ...{ flexDir: 'row' }, ...[stylesTabBar, { paddingBottom: 8 }] }
+// = { flexDir: 'row', 0: stylesTabBar, 1: { paddingBottom: 8 } }  ← 숫자 키!
+```
+
+React DOM이 `element.style[0] = stylesTabBar` 시도 → 크래시
+
+expo-router 소스에도 이 문제에 대한 dev 경고가 있음 (`Slot.js`의 `ShimSlotForReactNative`).
+
+**수정:** 자식 View의 스타일을 `StyleSheet.flatten()`으로 먼저 평탄화
+
+```tsx
+// Before (broken):
+<View style={[styles.tabBar, { paddingBottom: Math.max(8, insets.bottom) }]}>
+
+// After (fixed):
+<View style={StyleSheet.flatten([styles.tabBar, { paddingBottom: Math.max(8, insets.bottom) }])}>
+```
+
+### 검증
+Playwright 모바일 뷰포트(390×844) 자동화 테스트:
+1. 로그인 화면 로드 ✅
+2. 게스트 모드 진입 → AppTabs 정상 렌더링 ✅
+3. 홈 탭 클릭 → 홈 화면(고양이 프로필, D-day 카드) 정상 표시 ✅
+4. Console/PageError 0건 ✅
+
+---
+
 ## 남은 작업 (TODO)
 
 - [x] Supabase DB 연동 → 고양이 데이터 / 검사 기록 실제 저장
@@ -925,6 +985,7 @@ Day 9까지 로컬에만 있던 Edge Function 2개를 Supabase 서버에 배포�
 - [x] pg_cron 스케줄 등록 (30분 주기 alarm-check)
 - [x] push-notify / alarm-check Edge Function 배포
 - [x] VAPID Secrets 등록 (push-notify Edge Function)
+- [x] 모바일 홈화면 white screen 버그 수정 (AnimatedSplashOverlay 웹 비활성화 + TabList 배열 스타일 flatten)
 - [ ] iOS PWA 탭바 safe area 완전 해결 (useSafeAreaInsets 정상 동작 확인 필요)
 - [ ] 웹 푸시 알림 실 수신 테스트 (iPhone 16 홈 화면 앱)
 - [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
