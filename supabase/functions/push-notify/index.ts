@@ -19,10 +19,12 @@ Deno.serve(async (req) => {
   const { userId, title, body } = await req.json() as { userId: string; title: string; body: string }
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
-  const { data: subs } = await supabase
+  const { data: subs, error: subsError } = await supabase
     .from('push_subscriptions')
     .select('endpoint, p256dh, auth')
     .eq('user_id', userId)
+
+  console.log('subs:', JSON.stringify(subs), 'error:', JSON.stringify(subsError), 'userId:', userId, 'hasServiceKey:', !!SERVICE_KEY)
 
   if (!subs?.length) return new Response(JSON.stringify({ sent: 0 }), { headers: corsHeaders })
 

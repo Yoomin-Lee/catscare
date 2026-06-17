@@ -987,7 +987,50 @@ Playwright 모바일 뷰포트(390×844) 자동화 테스트:
 - [x] VAPID Secrets 등록 (push-notify Edge Function)
 - [x] 모바일 홈화면 white screen 버그 수정 (AnimatedSplashOverlay 웹 비활성화 + TabList 배열 스타일 flatten)
 - [ ] iOS PWA 탭바 safe area 완전 해결 (useSafeAreaInsets 정상 동작 확인 필요)
+- [x] push_subscriptions 테이블 생성 및 GRANT 설정 (누락 확인 후 추가)
+- [x] Chrome Web Push 구독 성공 (벨 아이콘 → 허용 → DB 저장 확인)
+- [ ] push-notify Edge Function sent:0 버그 수정 (SUPABASE_SERVICE_ROLE_KEY 디버깅 진행 중)
 - [ ] 웹 푸시 알림 실 수신 테스트 (iPhone 16 홈 화면 앱)
 - [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] 소변 검사 기록 UI 구현
 - [ ] 다크모드 지원
+
+---
+
+## 2026-06-17 (Day 12) — 푸시 알림 배포 완료 및 디버깅
+
+### 55. Supabase Access Token 정리
+- 개발 중 생성한 PAT(catscare, rest04, gemini, elifetour-admin) 모두 삭제
+- PAT는 CLI 전용 — 앱 동작과 무관, 미사용 토큰 삭제로 보안 정리
+
+### 56. push_subscriptions 테이블 생성
+- 배포 후 테스트 중 구독 저장 실패 확인 → 테이블 자체가 schema.sql에 누락된 것을 발견
+- Supabase SQL Editor에서 생성 및 권한 설정:
+  ```sql
+  CREATE TABLE public.push_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "push_subscriptions: own rows only"
+    ON public.push_subscriptions FOR ALL
+    USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.push_subscriptions TO authenticated;
+  ```
+- schema.sql에도 동일 내용 추가 필요 (TODO)
+
+### 57. Chrome Web Push 구독 성공
+- Chrome 알림 권한 팝업이 조용한 알림 요청(quiet prompt)으로 주소창에 벨 아이콘으로 표시됨
+- 벨 아이콘 클릭 → 허용 → 토글 활성화 → DB에 구독 정보 저장 확인
+
+### 58. push-notify sent:0 버그 디버깅 (미완)
+- 증상: push_subscriptions에 데이터 있음 + 함수 정상 실행(booted/shutdown) + 응답 200 → 그러나 `{ sent: 0 }`
+- 원인 추정: SUPABASE_SERVICE_ROLE_KEY가 undefined → RLS 통과 못해 쿼리 결과 0건
+- 대응: console.log 디버깅 코드 추가 후 재배포, 다음 세션에서 로그 확인 예정
+  ```ts
+  console.log('subs:', JSON.stringify(subs), 'error:', JSON.stringify(subsError), 'hasServiceKey:', !!SERVICE_KEY)
+  ```
