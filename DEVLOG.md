@@ -989,8 +989,10 @@ Playwright 모바일 뷰포트(390×844) 자동화 테스트:
 - [ ] iOS PWA 탭바 safe area 완전 해결 (useSafeAreaInsets 정상 동작 확인 필요)
 - [x] push_subscriptions 테이블 생성 및 GRANT 설정 (누락 확인 후 추가)
 - [x] Chrome Web Push 구독 성공 (벨 아이콘 → 허용 → DB 저장 확인)
-- [ ] push-notify Edge Function sent:0 버그 수정 (SUPABASE_SERVICE_ROLE_KEY 디버깅 진행 중)
-- [ ] 웹 푸시 알림 실 수신 테스트 (iPhone 16 홈 화면 앱)
+- [x] push-notify Edge Function sent:0 버그 수정 (service_role GRANT + REST API 직접 호출)
+- [x] alarm-check 타임존 버그 수정 (UTC→KST, 30분 버킷)
+- [x] VAPID 키 재생성 및 secrets CLI 재등록
+- [ ] 웹 푸시 알림 실 수신 테스트 (BadJwtToken 403 → VAPID 키 재설정 후 재테스트 필요)
 - [ ] OCR 활성화 (Anthropic API 키 등록 후 즉시 사용 가능)
 - [ ] 소변 검사 기록 UI 구현
 - [ ] 다크모드 지원
@@ -1034,3 +1036,52 @@ Playwright 모바일 뷰포트(390×844) 자동화 테스트:
   ```ts
   console.log('subs:', JSON.stringify(subs), 'error:', JSON.stringify(subsError), 'hasServiceKey:', !!SERVICE_KEY)
   ```
+
+---
+
+## 2026-06-18 (Day 13) — 푸시 알림 디버깅 심층
+
+### 59. alarm-check 타임존 버그 수정
+- **버그**: Edge Function은 UTC로 실행되는데 사용자가 설정한 알림 시각(예: 오전 9시)은 KST(UTC+9) 기준
+- `n.time === nowHHMM` 비교가 9시간 차이로 절대 일치하지 않음
+- **추가 버그**: pg_cron 실행 시각에 몇 초 지연이 생기면 분이 달라져 일치 실패
+- **수정** (`supabase/functions/alarm-check/index.ts`):
+  ```ts
+  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const kstH = kstNow.getHours()
+  const kstM = kstNow.getMinutes() < 30 ? 0 : 30  // 30분 버킷으로 내림
+  const nowHHMM = `${String(kstH).padStart(2, '0')}:${String(kstM).padStart(2, '0')}`
+  ```
+
+### 60. push_subscriptions GRANT 누락 수정
+- `push-notify` Edge Function이 service_role 키로 `push_subscriptions` 쿼리 시 `permission denied` 에러
+- Supabase SQL Editor에서 권한 추가:
+  ```sql
+  GRANT ALL ON public.push_subscriptions TO service_role;
+  ```
+
+### 61. push-notify REST API 직접 호출 방식으로 변경
+- Supabase JS 클라이언트(`createClient`)가 service_role 키를 제대로 적용하지 못하는 문제
+- Supabase REST API를 fetch로 직접 호출하도록 변경:
+  ```ts
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${userId}&select=endpoint,p256dh,auth`,
+    { headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` } }
+  )
+  ```
+- 쿼리 성공 확인 (`subs: [{...}] status: 200 hasServiceKey: true`)
+
+### 62. VAPID 키 재생성 및 CLI 배포
+- 기존 VAPID private key 분실 → `npx web-push generate-vapid-keys`로 재생성
+- `.env` 공개키 업데이트
+- Supabase Access Token 발급 → CMD에서 CLI 배포 성공:
+  ```
+  set SUPABASE_ACCESS_TOKEN=토큰
+  npx supabase functions deploy push-notify --project-ref kbjxjogmnwurxbxnpfsz --no-verify-jwt
+  npx supabase secrets set VAPID_PUBLIC_KEY="..." VAPID_PRIVATE_KEY="..." --project-ref kbjxjogmnwurxbxnpfsz
+  ```
+
+### 63. sendNotification 403 BadJwtToken (미해결)
+- 증상: 구독 조회 성공 → `webpush.sendNotification` 호출 → FCM에서 `403 BadJwtToken` 반환
+- VAPID 키 쌍 재설정 및 앱 재빌드/재배포 후 재구독 완료
+- 재테스트 예정

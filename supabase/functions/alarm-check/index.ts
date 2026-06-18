@@ -27,7 +27,12 @@ Deno.serve(async () => {
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
   const now = new Date()
-  const nowHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  // Supabase Edge Functions run in UTC. Convert to KST (UTC+9) for time comparison.
+  // Also floor minutes to the nearest 30-min bucket to tolerate pg_cron jitter.
+  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const kstH = kstNow.getHours()
+  const kstM = kstNow.getMinutes() < 30 ? 0 : 30
+  const nowHHMM = `${String(kstH).padStart(2, '0')}:${String(kstM).padStart(2, '0')}`
 
   const { data: schedules } = await supabase
     .from('schedules')

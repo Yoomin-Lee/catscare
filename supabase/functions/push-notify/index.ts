@@ -1,4 +1,3 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2'
 import webpush from 'npm:web-push'
 
 const corsHeaders = {
@@ -18,18 +17,22 @@ Deno.serve(async (req) => {
 
   const { userId, title, body } = await req.json() as { userId: string; title: string; body: string }
 
-  const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
-  const { data: subs, error: subsError } = await supabase
-    .from('push_subscriptions')
-    .select('endpoint, p256dh, auth')
-    .eq('user_id', userId)
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${userId}&select=endpoint,p256dh,auth`,
+    {
+      headers: {
+        'apikey': SERVICE_KEY,
+        'Authorization': `Bearer ${SERVICE_KEY}`,
+      }
+    }
+  )
+  const subs = await res.json()
+  console.log('subs:', JSON.stringify(subs), 'status:', res.status, 'hasServiceKey:', !!SERVICE_KEY)
 
-  console.log('subs:', JSON.stringify(subs), 'error:', JSON.stringify(subsError), 'userId:', userId, 'hasServiceKey:', !!SERVICE_KEY)
-
-  if (!subs?.length) return new Response(JSON.stringify({ sent: 0 }), { headers: corsHeaders })
+  if (!Array.isArray(subs) || !subs.length) return new Response(JSON.stringify({ sent: 0 }), { headers: corsHeaders })
 
   let sent = 0
-  await Promise.all(subs.map(async (s) => {
+  await Promise.all(subs.map(async (s: { endpoint: string; p256dh: string; auth: string }) => {
     try {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
@@ -37,8 +40,16 @@ Deno.serve(async (req) => {
       )
       sent++
     } catch (e) {
-      if ((e as { statusCode?: number }).statusCode === 410) {
-        await supabase.from('push_subscriptions').delete().eq('endpoint', s.endpoint)
+      const err = e as { statusCode?: number; message?: string; body?: string }
+      console.log('sendNotification error:', err?.statusCode, err?.message, err?.body)
+      if (err?.statusCode === 410) {
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(s.endpoint)}`,
+          {
+            method: 'DELETE',
+            headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` }
+          }
+        )
       }
     }
   }))
