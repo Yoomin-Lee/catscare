@@ -1085,3 +1085,84 @@ Playwright 모바일 뷰포트(390×844) 자동화 테스트:
 - 증상: 구독 조회 성공 → `webpush.sendNotification` 호출 → FCM에서 `403 BadJwtToken` 반환
 - VAPID 키 쌍 재설정 및 앱 재빌드/재배포 후 재구독 완료
 - 재테스트 예정
+
+---
+
+## 2026-06-20 (Day 14) — 푸시 알림 최종 완성
+
+### 64. alarm-check daysUntil UTC/KST 버그 수정
+**파일:** `supabase/functions/alarm-check/index.ts`
+
+- **버그:** `daysUntil(nextHospital, now)` 호출 시 UTC `now`를 사용 → KST 06:00~08:59 구간(UTC 전날 21:00~23:59)에서 `daysLeft`가 실제보다 1 크게 계산됨
+- **원인:** 시각 비교(`nowHHMM`)는 KST 기준으로 올바르게 변환했지만, 날짜 계산에는 UTC `now`를 그대로 전달
+- **수정:** `daysUntil` 두 곳 모두 `now` → `kstNow`로 교체
+  ```ts
+  // Before
+  const daysLeft = daysUntil(nextHospital, now)
+  // After
+  const daysLeft = daysUntil(nextHospital, kstNow)
+  ```
+
+### 65. VAPID 키 불일치 원인 규명 및 해결
+- **근본 원인:** VAPID 키가 3가지 서로 다른 값으로 혼재
+  1. `.env`의 `EXPO_PUBLIC_VAPID_PUBLIC_KEY` (앱 번들에 포함되는 값)
+  2. Supabase Secrets의 `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (push-notify가 서명에 사용)
+  3. Expo 빌드 캐시에 구워진 이전 키 (`BF3WQEClvA9QrL2iiWV...`)
+- **추가 혼선:** 사용자가 `Usersym216catscare.env`(잘못된 파일)를 수정하고 `.env`(실제 사용 파일)는 그대로였음
+- **해결 순서:**
+  1. `npx web-push generate-vapid-keys`로 새 키 쌍 생성
+  2. `.env`의 `EXPO_PUBLIC_VAPID_PUBLIC_KEY` 교체
+  3. Supabase Secrets `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` 동일 키 쌍으로 교체
+  4. `npx expo export --platform web --clear` (캐시 무효화 빌드)
+  5. 빌드 파일에서 새 키 존재 확인 후 배포
+  6. `DELETE FROM push_subscriptions;` → 앱 재구독
+
+### 66. push_subscriptions 테이블 생성 (누락)
+- `sent: 0` 원인 중 하나 → 테이블 자체 미존재 확인 (`PGRST205` 에러)
+- Supabase SQL Editor에서 최종 생성:
+  ```sql
+  CREATE TABLE public.push_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(endpoint)
+  );
+  ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "push_subscriptions: own rows only"
+    ON public.push_subscriptions FOR ALL
+    USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.push_subscriptions TO authenticated;
+  GRANT SELECT, DELETE ON public.push_subscriptions TO service_role;
+  ```
+
+### 67. 푸시 알림 end-to-end 최종 검증 ✅
+- Supabase Edge Functions → push-notify 테스트에서 `{ "sent": 1 }` 확인
+- iOS Safari PWA(홈화면 추가)에서 구독 성공 (push_subscriptions 행 생성 확인)
+- pg_cron 잡 (`*/30 * * * *`) 활성 상태 확인
+
+### 완성된 푸시 알림 아키텍처
+
+```
+[앱] 알림 수신 토글 ON
+  → Notification.requestPermission() → PushManager.subscribe(VAPID 공개키)
+  → push_subscriptions 테이블 UPSERT
+
+[pg_cron] */30 * * * *
+  → alarm-check Edge Function 호출
+    → schedules 테이블 전체 조회
+    → KST 기준 날짜/시각 계산 (kstNow 사용)
+    → 조건 일치 시 push-notify 호출
+
+[push-notify Edge Function]
+  → push_subscriptions 조회 (service_role 키)
+  → web-push 라이브러리로 VAPID 서명
+  → FCM 엔드포인트에 Web Push 발송
+  → 410 응답 시 만료된 구독 자동 삭제
+
+[Service Worker (sw.js)]
+  → push 이벤트 수신 → showNotification()
+  → notificationclick → /catscare/ 오픈
+```

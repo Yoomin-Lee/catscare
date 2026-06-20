@@ -47,7 +47,7 @@ Deno.serve(async () => {
 
     if (alarmsEnabled?.hospital) {
       const nextHospital = addMonths(s.hospital_last_date as string, s.hospital_cycle as number)
-      const daysLeft = daysUntil(nextHospital, now)
+      const daysLeft = daysUntil(nextHospital, kstNow)
       for (const n of hospitalNotify) {
         if (n.days === daysLeft && n.time === nowHHMM) {
           await fetch(PUSH_NOTIFY_URL, {
@@ -65,7 +65,7 @@ Deno.serve(async () => {
 
     if (alarmsEnabled?.sand) {
       const nextSand = addWeeks(s.sand_last_date as string, s.sand_cycle as number)
-      const daysLeft = daysUntil(nextSand, now)
+      const daysLeft = daysUntil(nextSand, kstNow)
       for (const n of sandNotify) {
         if (n.days === daysLeft && n.time === nowHHMM) {
           await fetch(PUSH_NOTIFY_URL, {
