@@ -1166,3 +1166,21 @@ Playwright 모바일 뷰포트(390×844) 자동화 테스트:
   → push 이벤트 수신 → showNotification()
   → notificationclick → /catscare/ 오픈
 ```
+
+---
+
+## 2026-06-21 (Day 15) — iOS 모바일 푸시 알림 미수신 디버깅
+
+### 68. iOS PWA 푸시 알림 미수신 확인
+- push-notify 직접 테스트(`sent: 1`)는 성공하지만 iOS PWA에서 실제 알림이 수신되지 않음
+- 가능한 원인 후보:
+  1. **알림 시각 불일치**: pg_cron이 30분마다 실행되므로 설정한 알림 시각이 정확히 `:00` 또는 `:30`에 맞지 않으면 미발송
+  2. **iOS 서비스 워커 구버전 캐시**: 모바일 PWA가 구버전 sw.js를 캐시하고 있어 새 VAPID 키로 구독했더라도 push 이벤트 핸들러가 구버전일 가능성
+  3. **iOS PWA 알림 권한**: 설정 → CatsCare 알림이 실제로 켜져 있는지 확인 필요
+  4. **구독 endpoint 만료**: iOS Safari PWA 구독이 만료(410)되었을 경우 자동 삭제 후 재구독 필요
+
+### 현재 상태
+- push-notify Edge Function: `sent: 1` (정상) ✅
+- iOS push_subscriptions 행: 존재 확인 ✅
+- pg_cron: `*/30 * * * *` 활성 ✅
+- iOS 실제 알림 수신: 미확인 (디버깅 진행 중) ⏳
